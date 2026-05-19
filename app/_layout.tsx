@@ -1,4 +1,6 @@
 import { Stack } from 'expo-router';
+import { useEffect } from 'react';
+import { initializeDatabase } from '../db/database';
 
 /**
  * Root layout component for the Expo Router app.
@@ -9,5 +11,10 @@ import { Stack } from 'expo-router';
  * @returns {JSX.Element} The root Stack navigator element.
  */
 export default function RootLayout() {
+	useEffect(() => {
+		// Initialize local DB once near app startup so screens can query immediately.
+		void initializeDatabase();
+	}, []);
+
 	return <Stack />;
 }

@@ -1,3 +1,4 @@
+import { getDb, initializeDatabase } from '../db/database';
 import { Illustration } from '../types/illustration';
 
 /**
@@ -8,33 +9,24 @@ import { Illustration } from '../types/illustration';
  * - The implementation can be swapped from mock data to SQLite with minimal UI changes.
  */
 
-const demoRows: Illustration[] = [
-	{
-		id: 1,
-		topic: 'Grace Under Pressure',
-		illus: 'Calm, controlled response under stress.',
-		application: 'Team lead de-escalates a production incident.',
-		sourceLink: 'Seed data',
-		createdAt: new Date(0).toISOString(),
-		updatedAt: new Date(0).toISOString(),
-	},
-	{
-		id: 2,
-		topic: 'Incremental Learning',
-		illus: 'Small improvements compound over time.',
-		application: 'Daily coding practice with reflection notes.',
-		sourceLink: 'Seed data',
-		createdAt: new Date(0).toISOString(),
-		updatedAt: new Date(0).toISOString(),
-	},
-];
-
 /**
  * Returns all illustrations ordered by topic.
+ *
+ * Phase 2.1 implementation notes:
+ * - Ensure schema is initialized before querying.
+ * - Read directly from SQLite instead of in-memory demo rows.
  *
  * @returns {Promise<Illustration[]>} A promise containing the list data.
  */
 export async function listIllustrations(): Promise<Illustration[]> {
-	const sorted = [...demoRows].sort((a, b) => a.topic.localeCompare(b.topic));
-	return sorted;
+	await initializeDatabase();
+	const db = await getDb();
+
+	const rows = await db.getAllAsync<Illustration>(
+		`SELECT id, topic, illus, application, sourceLink, createdAt, updatedAt
+		 FROM illustrations
+		 ORDER BY topic COLLATE NOCASE ASC`,
+	);
+
+	return rows;
 }
