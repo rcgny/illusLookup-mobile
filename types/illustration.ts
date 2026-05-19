@@ -1,0 +1,16 @@
+/**
+ * Shared data model for one illustration record.
+ *
+ * This type mirrors the shape expected by Home/List, Create, Edit, and Delete
+ * screens. Keeping the model in one place helps maintain consistency while
+ * the app evolves from placeholders to full SQLite CRUD flows.
+ */
+export interface Illustration {
+	id: number;
+	topic: string;
+	illus: string;
+	application: string;
+	sourceLink: string;
+	createdAt: string;
+	updatedAt: string;
+}

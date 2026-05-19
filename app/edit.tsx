@@ -1,11 +1,12 @@
 import { Text, View } from 'react-native';
 
 /**
- * Renders the Edit screen.
+ * Placeholder Edit screen.
  *
- * Displays a simple placeholder layout with the "Edit Screen" title.
+ * This route is intentionally minimal while the project migrates from web API
+ * CRUD flows to local SQLite CRUD flows in Expo.
  *
- * @returns {JSX.Element} The Edit screen view.
+ * @returns {JSX.Element} The Edit route placeholder UI.
  */
 export default function EditScreen() {
 	return (
