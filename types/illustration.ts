@@ -14,3 +14,16 @@ export interface Illustration {
 	createdAt: string;
 	updatedAt: string;
 }
+
+/**
+ * Input payload for creating a new illustration.
+ *
+ * Fields mirror user-entered form values. Database-managed fields such as
+ * id/createdAt/updatedAt are excluded because they are generated during insert.
+ */
+export interface CreateIllustrationInput {
+	topic: string;
+	illus: string;
+	application: string;
+	sourceLink: string;
+}
