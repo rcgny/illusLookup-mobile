@@ -27,3 +27,16 @@ export interface CreateIllustrationInput {
 	application: string;
 	sourceLink: string;
 }
+
+/**
+ * Input payload for updating an existing illustration.
+ *
+ * The editable fields mirror create input values. The target row is selected
+ * separately by id in repository operations.
+ */
+export interface UpdateIllustrationInput {
+	topic: string;
+	illus: string;
+	application: string;
+	sourceLink: string;
+}

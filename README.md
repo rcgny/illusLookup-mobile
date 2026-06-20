@@ -2,6 +2,19 @@
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
+## Phase 2 Summary
+
+- Phase 2.1: Connected list and home browsing to local SQLite through a repository layer.
+- Phase 2.2: Implemented create flow with required-field validation, Keep/Undo confirmation, and insert persistence.
+- Phase 2.3: Implemented edit/update + delete flow with record selection, prefilled form state, validation, Keep/Undo confirmation, and SQLite update persistence.
+
+### Key Files
+
+- `services/illustrationsRepo.ts`: List, create, and update repository operations.
+- `app/create.tsx`: Phase 2.2 create UI and save flow.
+- `app/edit.tsx`: Phase 2.3 edit UI and update flow.
+- `types/illustration.ts`: Shared record and input payload types.
+
 ## Get started
 
 1. Install dependencies

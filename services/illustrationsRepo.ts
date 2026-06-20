@@ -1,5 +1,9 @@
 import { getDb, initializeDatabase } from '../db/database';
-import { CreateIllustrationInput, Illustration } from '../types/illustration';
+import {
+	CreateIllustrationInput,
+	Illustration,
+	UpdateIllustrationInput,
+} from '../types/illustration';
 
 /**
  * Learning-project repository boundary for illustration queries.
@@ -78,4 +82,91 @@ export async function createIllustration(
 	}
 
 	return row;
+}
+
+/**
+ * Updates an existing illustration and returns the saved row.
+ *
+ * Phase 2.3 implementation notes:
+ * - Validates id and required fields before writing.
+ * - Updates updatedAt timestamp in repository layer.
+ * - Reloads row from SQLite to return canonical saved state.
+ *
+ * @param {number} id Illustration id to update.
+ * @param {UpdateIllustrationInput} input Updated field values.
+ * @returns {Promise<Illustration>} Updated row from SQLite.
+ */
+export async function updateIllustration(
+	id: number,
+	input: UpdateIllustrationInput,
+): Promise<Illustration> {
+	await initializeDatabase();
+	const db = await getDb();
+
+	if (!Number.isFinite(id) || id <= 0) {
+		throw new Error('A valid illustration id is required for update.');
+	}
+
+	const topic = input.topic.trim();
+	const illus = input.illus.trim();
+	const application = input.application.trim();
+	const sourceLink = input.sourceLink.trim();
+
+	if (!topic || !illus || !application || !sourceLink) {
+		throw new Error('All fields are required to update an illustration.');
+	}
+
+	const now = new Date().toISOString();
+	const result = await db.runAsync(
+		`UPDATE illustrations
+		 SET topic = ?, illus = ?, application = ?, sourceLink = ?, updatedAt = ?
+		 WHERE id = ?`,
+		[topic, illus, application, sourceLink, now, id],
+	);
+
+	if (result.changes === 0) {
+		throw new Error('Illustration not found. It may have been removed.');
+	}
+
+	const row = await db.getFirstAsync<Illustration>(
+		`SELECT id, topic, illus, application, sourceLink, createdAt, updatedAt
+		 FROM illustrations
+		 WHERE id = ?`,
+		[id],
+	);
+
+	if (!row) {
+		throw new Error('Illustration was updated but could not be reloaded.');
+	}
+
+	return row;
+}
+
+/**
+ * Deletes an illustration by id.
+ *
+ * Phase 2.3 implementation notes:
+ * - Validates target id before delete.
+ * - Throws when no row was deleted (already removed or invalid id).
+ *
+ * @param {number} id Illustration id to delete.
+ * @returns {Promise<void>} Resolves when deletion succeeds.
+ */
+export async function deleteIllustration(id: number): Promise<void> {
+	await initializeDatabase();
+	const db = await getDb();
+
+	if (!Number.isFinite(id) || id <= 0) {
+		throw new Error('A valid illustration id is required for deletion.');
+	}
+
+	const result = await db.runAsync(`DELETE FROM illustrations WHERE id = ?`, [
+		id,
+	]);
+
+	if (result.changes === 0) {
+		throw new Error(
+			'Illustration not found. It may have already been deleted.',
+		);
+	}
 }

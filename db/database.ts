@@ -11,6 +11,7 @@ import * as SQLite from 'expo-sqlite';
 
 const DB_NAME = 'illuslookup.db';
 let dbInstance: SQLite.SQLiteDatabase | null = null;
+let initializationPromise: Promise<void> | null = null;
 
 /**
  * Returns a shared database connection.
@@ -44,6 +45,10 @@ async function createSchema(): Promise<void> {
 			sourceLink TEXT NOT NULL,
 			createdAt TEXT NOT NULL,
 			updatedAt TEXT NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS app_meta (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL
 		);
 		CREATE INDEX IF NOT EXISTS idx_illustrations_topic
 		ON illustrations(topic);
@@ -97,7 +102,42 @@ async function seedIfEmpty(): Promise<void> {
 	);
 }
 
-let initialized = false;
+/**
+ * One-time migration to remove duplicate topics caused by earlier init races.
+ *
+ * Dedup strategy keeps the earliest row (smallest id) for each normalized topic,
+ * then deletes later duplicates. A meta flag ensures this runs only once.
+ *
+ * @returns {Promise<void>} Resolves when cleanup is complete or already applied.
+ */
+async function cleanupDuplicateTopicsOnce(): Promise<void> {
+	const db = await getDb();
+
+	const alreadyRan = await db.getFirstAsync<{ value: string }>(
+		`SELECT value FROM app_meta WHERE key = ?`,
+		['cleanup_duplicate_topics_v1'],
+	);
+
+	if (alreadyRan?.value === 'done') {
+		return;
+	}
+
+	await db.execAsync(`
+		DELETE FROM illustrations
+		WHERE id NOT IN (
+			SELECT MIN(id)
+			FROM illustrations
+			GROUP BY LOWER(TRIM(topic))
+		);
+	`);
+
+	await db.runAsync(
+		`INSERT INTO app_meta (key, value)
+		 VALUES (?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		['cleanup_duplicate_topics_v1', 'done'],
+	);
+}
 
 /**
  * Initializes schema + starter seed once per app process.
@@ -107,8 +147,13 @@ let initialized = false;
  * @returns {Promise<void>} Resolves when DB is ready to query.
  */
 export async function initializeDatabase(): Promise<void> {
-	if (initialized) return;
-	await createSchema();
-	await seedIfEmpty();
-	initialized = true;
+	if (!initializationPromise) {
+		initializationPromise = (async () => {
+			await createSchema();
+			await seedIfEmpty();
+			await cleanupDuplicateTopicsOnce();
+		})();
+	}
+
+	await initializationPromise;
 }
