@@ -18,7 +18,8 @@ import { Illustration } from '../types/illustration';
  *
  * Key behaviors for this learning project:
  * - Loads rows from the SQLite repository when the screen gains focus.
- * - Filters rows by topic based on a search query.
+ * - Phase 2.4 Step 1: Topic combo-box with in-input search + selection reset.
+ * - Phase 2.4 Step 2: Home cards use default A-Z ordering.
  * - Uses explicit Keep/Undo prompts before navigation and search clear actions.
  *
  * @returns {JSX.Element} The Home/List screen.
@@ -26,14 +27,15 @@ import { Illustration } from '../types/illustration';
 export default function IndexScreen() {
 	// SECTION 1: Router + screen state
 	// The router handles navigation to Create/Edit/Delete screens.
-	// State values track fetched data, UI status, and user input.
+	// State values track fetched data, UI status, and topic combo-box input.
 	const router = useRouter();
 	const [items, setItems] = useState<Illustration[]>([]);
-	const [query, setQuery] = useState('');
+	const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+	const [topicSearch, setTopicSearch] = useState('');
+	const [comboOpen, setComboOpen] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	// useRef stores the last query without forcing a re-render.
-	const previousQueryRef = useRef('');
+	const comboInputRef = useRef<TextInput | null>(null);
 
 	// SECTION 2: Data loading
 	// This function is the single source of truth for loading list data.
@@ -61,15 +63,35 @@ export default function IndexScreen() {
 		}, [load]),
 	);
 
-	// SECTION 4: Derived searchable list
-	// The original fetched list remains unchanged. Filtering is derived from
-	// query + items, then memoized for efficiency.
-	const filtered = useMemo(() => {
-		// Derived list avoids mutating source data and recomputes only when needed.
-		const q = query.trim().toLowerCase();
-		if (!q) return items;
-		return items.filter((i) => i.topic.toLowerCase().includes(q));
-	}, [items, query]);
+	// SECTION 4: Derived topic options + visible card list
+	// Phase 2.4 Step 1: Build sorted topic options for combo-box search/select.
+	// Phase 2.4 Step 2: Build result list in default A-Z order.
+	const sortedTopics = useMemo(() => {
+		const unique = Array.from(new Set(items.map((i) => i.topic.trim()))).filter(
+			(topic) => topic.length > 0,
+		);
+
+		return unique.sort((a, b) =>
+			a.localeCompare(b, undefined, { sensitivity: 'base' }),
+		);
+	}, [items]);
+
+	const filteredTopics = useMemo(() => {
+		const q = topicSearch.trim().toLowerCase();
+		if (!q) return sortedTopics;
+		return sortedTopics.filter((topic) => topic.toLowerCase().includes(q));
+	}, [sortedTopics, topicSearch]);
+
+	const selectedTopicItems = useMemo(() => {
+		if (!selectedTopic) return items;
+		return items.filter((item) => item.topic === selectedTopic);
+	}, [items, selectedTopic]);
+
+	const visibleItems = useMemo(() => {
+		return [...selectedTopicItems].sort((a, b) =>
+			a.topic.localeCompare(b.topic, undefined, { sensitivity: 'base' }),
+		);
+	}, [selectedTopicItems]);
 
 	// SECTION 5: Keep/Undo prompt helper
 	// Any action that should be confirmed first can reuse this utility.
@@ -112,36 +134,46 @@ export default function IndexScreen() {
 		[router, withKeepUndoPrompt],
 	);
 
-	// SECTION 7: Prompted search clear with undo restore
-	// Undo restores the previously typed query value.
-	const clearSearchWithPrompt = useCallback(() => {
-		if (!query) return;
-		const previous = previousQueryRef.current;
+	// SECTION 7: Combo-box actions
+	// Phase 2.4 Step 1 controls: open/close, type-search, select, and clear.
+	const toggleCombo = useCallback(() => {
+		setComboOpen((open) => {
+			const next = !open;
+			if (next) {
+				setTopicSearch(selectedTopic ?? '');
+			}
+			return next;
+		});
+	}, [selectedTopic]);
 
-		// Undo restores the last search text tracked by previousQueryRef.
-		withKeepUndoPrompt(
-			'Clear Search',
-			'Keep clear search or undo to restore your last text?',
-			() => {
-				previousQueryRef.current = query;
-				setQuery('');
-			},
-			() => {
-				setQuery(previous);
-			},
-		);
-	}, [query, withKeepUndoPrompt]);
+	const selectTopic = useCallback((topic: string) => {
+		setSelectedTopic(topic);
+		setComboOpen(false);
+		setTopicSearch(topic);
+	}, []);
 
-	// SECTION 8: Query input handler
-	// Capture the prior query first so Undo has a restore value.
-	const onQueryChange = useCallback(
+	const clearSelection = useCallback(() => {
+		setSelectedTopic(null);
+		setTopicSearch('');
+		setComboOpen(false);
+	}, []);
+
+	const onComboSearchChange = useCallback(
 		(value: string) => {
-			// Track prior value so Undo has a known restore point.
-			previousQueryRef.current = query;
-			setQuery(value);
+			setComboOpen(true);
+			setTopicSearch(value);
+
+			if (selectedTopic && value.trim() !== selectedTopic) {
+				setSelectedTopic(null);
+			}
 		},
-		[query],
+		[selectedTopic],
 	);
+
+	const onComboFocus = useCallback(() => {
+		setComboOpen(true);
+		setTopicSearch(selectedTopic ?? '');
+	}, [selectedTopic]);
 
 	// SECTION 9: Render
 	// Layout order: title -> search -> action buttons -> status states -> list.
@@ -149,13 +181,58 @@ export default function IndexScreen() {
 		<View style={styles.screen}>
 			<Text style={styles.title}>Illustrations</Text>
 
-			<TextInput
-				value={query}
-				onChangeText={onQueryChange}
-				placeholder="Search topic..."
-				style={styles.search}
-				autoCapitalize="none"
-			/>
+			<View style={styles.comboContainer}>
+				<View style={styles.comboInput}>
+					<TextInput
+						ref={comboInputRef}
+						value={comboOpen ? topicSearch : (selectedTopic ?? '')}
+						onFocus={onComboFocus}
+						onChangeText={onComboSearchChange}
+						placeholder="Select Topic"
+						style={styles.comboTextInput}
+						autoCapitalize="none"
+						autoCorrect={false}
+					/>
+					<View style={styles.comboInputActions}>
+						{(selectedTopic || topicSearch) && (
+							<Pressable
+								onPress={clearSelection}
+								style={styles.iconButton}
+								hitSlop={8}
+							>
+								<Text style={styles.iconButtonText}>X</Text>
+							</Pressable>
+						)}
+						<Pressable onPress={toggleCombo} hitSlop={8}>
+							<Text style={styles.comboChevron}>{comboOpen ? '▲' : '▼'}</Text>
+						</Pressable>
+					</View>
+				</View>
+
+				{comboOpen && (
+					<View style={styles.comboDropdown}>
+						{filteredTopics.length === 0 ? (
+							<Text style={styles.comboEmpty}>No matching topics.</Text>
+						) : (
+							<FlatList
+								data={filteredTopics}
+								keyExtractor={(topic) => topic}
+								style={styles.comboList}
+								keyboardShouldPersistTaps="handled"
+								initialNumToRender={6}
+								renderItem={({ item }) => (
+									<Pressable
+										style={styles.comboOption}
+										onPress={() => selectTopic(item)}
+									>
+										<Text style={styles.comboOptionText}>{item}</Text>
+									</Pressable>
+								)}
+							/>
+						)}
+					</View>
+				)}
+			</View>
 
 			<View style={styles.quickActionsRow}>
 				<Pressable
@@ -178,22 +255,16 @@ export default function IndexScreen() {
 				</Pressable>
 			</View>
 
-			<View style={styles.quickActionsRow}>
-				<Pressable style={styles.clearBtn} onPress={clearSearchWithPrompt}>
-					<Text style={styles.clearText}>Clear Search</Text>
-				</Pressable>
-			</View>
-
 			{loading && <ActivityIndicator size="large" style={styles.loader} />}
 			{!loading && error && <Text style={styles.error}>{error}</Text>}
-			{!loading && !error && filtered.length === 0 && (
+			{!loading && !error && visibleItems.length === 0 && (
 				<Text style={styles.empty}>No illustrations found.</Text>
 			)}
 
-			{!loading && !error && filtered.length > 0 && (
+			{!loading && !error && visibleItems.length > 0 && (
 				// FlatList efficiently renders large lists by virtualizing off-screen rows.
 				<FlatList
-					data={filtered}
+					data={visibleItems}
 					keyExtractor={(item) => String(item.id)}
 					contentContainerStyle={styles.listContent}
 					renderItem={({ item }) => (
@@ -229,15 +300,76 @@ const styles = StyleSheet.create({
 		marginBottom: 12,
 		color: '#1f2937',
 	},
-	search: {
+	comboContainer: {
+		marginBottom: 12,
+		zIndex: 20,
+	},
+	comboInput: {
 		backgroundColor: '#ffffff',
 		borderRadius: 12,
 		borderWidth: 1,
 		borderColor: '#d1d5db',
 		paddingHorizontal: 12,
 		paddingVertical: 10,
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+	},
+	comboTextInput: {
+		flex: 1,
 		fontSize: 16,
-		marginBottom: 12,
+		color: '#111827',
+	},
+	comboInputActions: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+	},
+	comboChevron: {
+		fontSize: 12,
+		color: '#374151',
+	},
+	iconButton: {
+		width: 24,
+		height: 24,
+		borderRadius: 12,
+		borderWidth: 1,
+		borderColor: '#cbd5e1',
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: '#f8fafc',
+	},
+	iconButtonText: {
+		fontSize: 12,
+		fontWeight: '700',
+		color: '#334155',
+	},
+	comboDropdown: {
+		marginTop: 8,
+		backgroundColor: '#ffffff',
+		borderRadius: 12,
+		borderWidth: 1,
+		borderColor: '#d1d5db',
+		overflow: 'hidden',
+	},
+	comboList: {
+		maxHeight: 264,
+	},
+	comboOption: {
+		paddingHorizontal: 12,
+		paddingVertical: 11,
+		borderBottomWidth: 1,
+		borderBottomColor: '#f1f5f9',
+	},
+	comboOptionText: {
+		fontSize: 15,
+		color: '#111827',
+	},
+	comboEmpty: {
+		paddingHorizontal: 12,
+		paddingVertical: 14,
+		fontSize: 14,
+		color: '#6b7280',
 	},
 	quickActionsRow: {
 		flexDirection: 'row',
@@ -251,16 +383,6 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 12,
 	},
 	actionText: {
-		color: '#ffffff',
-		fontWeight: '600',
-	},
-	clearBtn: {
-		backgroundColor: '#475569',
-		borderRadius: 10,
-		paddingVertical: 8,
-		paddingHorizontal: 12,
-	},
-	clearText: {
 		color: '#ffffff',
 		fontWeight: '600',
 	},

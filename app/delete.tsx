@@ -1,12 +1,13 @@
 import { Href, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
 	Alert,
+	FlatList,
 	Pressable,
-	ScrollView,
 	StyleSheet,
 	Text,
+	TextInput,
 	View,
 } from 'react-native';
 import {
@@ -23,6 +24,8 @@ import { Illustration } from '../types/illustration';
  * - Shows a read-only preview before deletion.
  * - Uses explicit Keep/Undo confirmation before delete.
  * - Returns to Home after successful delete.
+ * - Phase 2.4 Step 3: Uses a Home-style combo-box for searchable selection.
+ * - Phase 2.4 Step 4: Removes outer ScrollView to avoid nested VirtualizedList warning.
  *
  * @returns {JSX.Element} The Delete route screen.
  */
@@ -31,15 +34,34 @@ export default function DeleteScreen() {
 	const router = useRouter();
 	const [items, setItems] = useState<Illustration[]>([]);
 	const [selectedId, setSelectedId] = useState<number | null>(null);
+	const [topicSearch, setTopicSearch] = useState('');
+	const [comboOpen, setComboOpen] = useState(false);
 	const [loadingList, setLoadingList] = useState(true);
 	const [deleting, setDeleting] = useState(false);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [successMessage, setSuccessMessage] = useState<string | null>(null);
+	const comboInputRef = useRef<TextInput | null>(null);
 
 	const selectedItem =
 		selectedId === null
 			? null
 			: (items.find((item) => item.id === selectedId) ?? null);
+
+	const sortedTopics = useMemo(() => {
+		const unique = Array.from(new Set(items.map((i) => i.topic.trim()))).filter(
+			(topic) => topic.length > 0,
+		);
+
+		return unique.sort((a, b) =>
+			a.localeCompare(b, undefined, { sensitivity: 'base' }),
+		);
+	}, [items]);
+
+	const filteredTopics = useMemo(() => {
+		const q = topicSearch.trim().toLowerCase();
+		if (!q) return sortedTopics;
+		return sortedTopics.filter((topic) => topic.toLowerCase().includes(q));
+	}, [sortedTopics, topicSearch]);
 
 	// SECTION 2: Load items when screen becomes active
 	const load = useCallback(async () => {
@@ -52,12 +74,21 @@ export default function DeleteScreen() {
 
 			if (data.length === 0) {
 				setSelectedId(null);
+				setTopicSearch('');
+				setComboOpen(false);
 				return;
 			}
 
 			const stillExists =
 				selectedId !== null && data.some((item) => item.id === selectedId);
-			setSelectedId(stillExists ? selectedId : data[0].id);
+			setSelectedId(stillExists ? selectedId : null);
+
+			if (stillExists) {
+				const existing = data.find((item) => item.id === selectedId);
+				setTopicSearch(existing?.topic ?? '');
+			} else {
+				setTopicSearch('');
+			}
 		} catch {
 			setErrorMessage('Failed to load illustrations for deletion.');
 		} finally {
@@ -71,11 +102,48 @@ export default function DeleteScreen() {
 		}, [load]),
 	);
 
-	const handleSelect = (id: number) => {
+	const handleSelect = (id: number, topic: string) => {
 		setSelectedId(id);
+		setTopicSearch(topic);
+		setComboOpen(false);
 		setErrorMessage(null);
 		setSuccessMessage(null);
 	};
+
+	const toggleCombo = useCallback(() => {
+		setComboOpen((open) => {
+			const next = !open;
+			if (next) {
+				setTopicSearch(selectedItem?.topic ?? '');
+			}
+			return next;
+		});
+	}, [selectedItem]);
+
+	const onComboFocus = useCallback(() => {
+		setComboOpen(true);
+		setTopicSearch(selectedItem?.topic ?? '');
+	}, [selectedItem]);
+
+	const onComboSearchChange = useCallback(
+		(value: string) => {
+			setComboOpen(true);
+			setTopicSearch(value);
+
+			if (selectedItem && value.trim() !== selectedItem.topic) {
+				setSelectedId(null);
+			}
+		},
+		[selectedItem],
+	);
+
+	const clearSelection = useCallback(() => {
+		setSelectedId(null);
+		setTopicSearch('');
+		setComboOpen(false);
+		setErrorMessage(null);
+		setSuccessMessage(null);
+	}, []);
 
 	// SECTION 3: Confirmed delete flow
 	const runDelete = async () => {
@@ -131,101 +199,125 @@ export default function DeleteScreen() {
 	};
 
 	return (
-		<ScrollView
-			contentContainerStyle={styles.scrollContent}
-			keyboardShouldPersistTaps="handled"
-		>
-			<View style={styles.screen}>
-				<Text style={styles.title}>Delete Illustration</Text>
-				<Text style={styles.subtitle}>
-					Select a record, review its details, then confirm deletion.
-				</Text>
+		// Phase 2.4 Step 4: Use a non-virtualized outer container so the
+		// combo dropdown FlatList is not nested inside same-orientation ScrollView.
+		<View style={styles.screen}>
+			<Text style={styles.title}>Delete Illustration</Text>
+			<Text style={styles.subtitle}>
+				Select from dropdown/search, review details, then confirm deletion.
+			</Text>
 
-				<Text style={styles.sectionTitle}>Choose Illustration</Text>
-				{loadingList && (
-					<ActivityIndicator size="small" style={styles.loader} />
-				)}
-				{!loadingList && items.length === 0 && (
-					<Text style={styles.empty}>
-						No illustrations available to delete.
-					</Text>
-				)}
+			<Text style={styles.sectionTitle}>Choose Illustration</Text>
+			{loadingList && <ActivityIndicator size="small" style={styles.loader} />}
+			{!loadingList && items.length === 0 && (
+				<Text style={styles.empty}>No illustrations available to delete.</Text>
+			)}
 
-				{!loadingList && items.length > 0 && (
-					<View style={styles.selectList}>
-						{items.map((item) => {
-							const isSelected = selectedId === item.id;
-							return (
+			{!loadingList && items.length > 0 && (
+				<View style={styles.comboContainer}>
+					<View style={styles.comboInput}>
+						<TextInput
+							ref={comboInputRef}
+							value={comboOpen ? topicSearch : (selectedItem?.topic ?? '')}
+							onFocus={onComboFocus}
+							onChangeText={onComboSearchChange}
+							placeholder="Select Topic"
+							style={styles.comboTextInput}
+							autoCapitalize="none"
+							autoCorrect={false}
+						/>
+						<View style={styles.comboInputActions}>
+							{(selectedItem || topicSearch) && (
 								<Pressable
-									key={item.id}
-									style={[
-										styles.selectItem,
-										isSelected && styles.selectItemSelected,
-									]}
-									onPress={() => handleSelect(item.id)}
+									onPress={clearSelection}
+									style={styles.iconButton}
+									hitSlop={8}
 								>
-									<Text
-										style={[
-											styles.selectItemText,
-											isSelected && styles.selectItemTextSelected,
-										]}
-									>
-										{item.topic}
-									</Text>
+									<Text style={styles.iconButtonText}>X</Text>
 								</Pressable>
-							);
-						})}
+							)}
+							<Pressable onPress={toggleCombo} hitSlop={8}>
+								<Text style={styles.comboChevron}>{comboOpen ? '▲' : '▼'}</Text>
+							</Pressable>
+						</View>
 					</View>
-				)}
 
-				<Text style={styles.sectionTitle}>Selected Preview</Text>
-				{selectedItem ? (
-					<View style={styles.previewCard}>
-						<Text style={styles.previewTopic}>{selectedItem.topic}</Text>
+					{comboOpen && (
+						<View style={styles.comboDropdown}>
+							{filteredTopics.length === 0 ? (
+								<Text style={styles.comboEmpty}>No matching topics.</Text>
+							) : (
+								<FlatList
+									data={filteredTopics}
+									keyExtractor={(topic) => topic}
+									style={styles.comboList}
+									keyboardShouldPersistTaps="handled"
+									initialNumToRender={6}
+									renderItem={({ item }) => {
+										const match = items.find((row) => row.topic === item);
+										if (!match) return null;
 
-						<Text style={styles.previewLabel}>Illustration</Text>
-						<Text style={styles.previewValue}>{selectedItem.illus}</Text>
-
-						<Text style={styles.previewLabel}>Application</Text>
-						<Text style={styles.previewValue}>{selectedItem.application}</Text>
-
-						<Text style={styles.previewLabel}>Source</Text>
-						<Text style={styles.previewValue}>{selectedItem.sourceLink}</Text>
-					</View>
-				) : (
-					<Text style={styles.empty}>Select an item to preview.</Text>
-				)}
-
-				{errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
-				{successMessage && <Text style={styles.success}>{successMessage}</Text>}
-
-				<Pressable
-					style={[
-						styles.deleteButton,
-						(deleting || !selectedItem) && styles.deleteButtonDisabled,
-					]}
-					onPress={handleDeletePress}
-					disabled={deleting || !selectedItem}
-				>
-					{deleting ? (
-						<ActivityIndicator color="#ffffff" />
-					) : (
-						<Text style={styles.deleteButtonText}>Delete Illustration</Text>
+										return (
+											<Pressable
+												style={styles.comboOption}
+												onPress={() => handleSelect(match.id, match.topic)}
+											>
+												<Text style={styles.comboOptionText}>{item}</Text>
+											</Pressable>
+										);
+									}}
+								/>
+							)}
+						</View>
 					)}
-				</Pressable>
-			</View>
-		</ScrollView>
+				</View>
+			)}
+
+			<Text style={styles.sectionTitle}>Selected Preview</Text>
+			{selectedItem ? (
+				<View style={styles.previewCard}>
+					<Text style={styles.previewTopic}>{selectedItem.topic}</Text>
+
+					<Text style={styles.previewLabel}>Illustration</Text>
+					<Text style={styles.previewValue}>{selectedItem.illus}</Text>
+
+					<Text style={styles.previewLabel}>Application</Text>
+					<Text style={styles.previewValue}>{selectedItem.application}</Text>
+
+					<Text style={styles.previewLabel}>Source</Text>
+					<Text style={styles.previewValue}>{selectedItem.sourceLink}</Text>
+				</View>
+			) : (
+				<Text style={styles.empty}>Select an item to preview.</Text>
+			)}
+
+			{errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
+			{successMessage && <Text style={styles.success}>{successMessage}</Text>}
+
+			<Pressable
+				style={[
+					styles.deleteButton,
+					(deleting || !selectedItem) && styles.deleteButtonDisabled,
+				]}
+				onPress={handleDeletePress}
+				disabled={deleting || !selectedItem}
+			>
+				{deleting ? (
+					<ActivityIndicator color="#ffffff" />
+				) : (
+					<Text style={styles.deleteButtonText}>Delete Illustration</Text>
+				)}
+			</Pressable>
+		</View>
 	);
 }
 
 const styles = StyleSheet.create({
-	scrollContent: {
-		paddingBottom: 24,
-	},
 	screen: {
 		flex: 1,
 		paddingHorizontal: 16,
 		paddingTop: 14,
+		paddingBottom: 24,
 		backgroundColor: '#f6f7f9',
 	},
 	title: {
@@ -254,29 +346,76 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		marginBottom: 8,
 	},
-	selectList: {
-		gap: 8,
+	comboContainer: {
 		marginBottom: 10,
+		zIndex: 20,
 	},
-	selectItem: {
+	comboInput: {
 		backgroundColor: '#ffffff',
-		borderRadius: 10,
+		borderRadius: 12,
 		borderWidth: 1,
 		borderColor: '#d1d5db',
-		paddingVertical: 10,
 		paddingHorizontal: 12,
+		paddingVertical: 10,
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
 	},
-	selectItemSelected: {
-		borderColor: '#b91c1c',
-		backgroundColor: '#fef2f2',
+	comboTextInput: {
+		flex: 1,
+		fontSize: 16,
+		color: '#111827',
 	},
-	selectItemText: {
-		color: '#1f2937',
+	comboInputActions: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+	},
+	comboChevron: {
+		fontSize: 12,
+		color: '#374151',
+	},
+	iconButton: {
+		width: 24,
+		height: 24,
+		borderRadius: 12,
+		borderWidth: 1,
+		borderColor: '#cbd5e1',
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: '#f8fafc',
+	},
+	iconButtonText: {
+		fontSize: 12,
+		fontWeight: '700',
+		color: '#334155',
+	},
+	comboDropdown: {
+		marginTop: 8,
+		backgroundColor: '#ffffff',
+		borderRadius: 12,
+		borderWidth: 1,
+		borderColor: '#d1d5db',
+		overflow: 'hidden',
+	},
+	comboList: {
+		maxHeight: 264,
+	},
+	comboOption: {
+		paddingHorizontal: 12,
+		paddingVertical: 11,
+		borderBottomWidth: 1,
+		borderBottomColor: '#f1f5f9',
+	},
+	comboOptionText: {
+		fontSize: 15,
+		color: '#111827',
+	},
+	comboEmpty: {
+		paddingHorizontal: 12,
+		paddingVertical: 14,
 		fontSize: 14,
-		fontWeight: '600',
-	},
-	selectItemTextSelected: {
-		color: '#b91c1c',
+		color: '#6b7280',
 	},
 	previewCard: {
 		backgroundColor: '#ffffff',

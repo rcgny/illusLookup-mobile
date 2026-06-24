@@ -1,10 +1,10 @@
 import { Href, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
 	Alert,
+	FlatList,
 	Pressable,
-	ScrollView,
 	StyleSheet,
 	Text,
 	TextInput,
@@ -25,6 +25,8 @@ import { Illustration, UpdateIllustrationInput } from '../types/illustration';
  * - Validates required values before update.
  * - Uses Keep/Undo confirmation before persisting changes.
  * - Returns to Home after successful update.
+ * - Phase 2.4 Step 5: Uses a Home-style combo-box for searchable selection.
+ * - Phase 2.4 Step 6: Uses non-ScrollView outer container to avoid nested list warnings.
  *
  * @returns {JSX.Element} The Edit route screen.
  */
@@ -32,6 +34,8 @@ export default function EditScreen() {
 	const router = useRouter();
 	const [items, setItems] = useState<Illustration[]>([]);
 	const [selectedId, setSelectedId] = useState<number | null>(null);
+	const [topicSearch, setTopicSearch] = useState('');
+	const [comboOpen, setComboOpen] = useState(false);
 	const [form, setForm] = useState<UpdateIllustrationInput>({
 		topic: '',
 		illus: '',
@@ -42,11 +46,28 @@ export default function EditScreen() {
 	const [saving, setSaving] = useState(false);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [successMessage, setSuccessMessage] = useState<string | null>(null);
+	const comboInputRef = useRef<TextInput | null>(null);
 
 	const selectedItem = useMemo(() => {
 		if (selectedId === null) return null;
 		return items.find((item) => item.id === selectedId) ?? null;
 	}, [items, selectedId]);
+
+	const sortedTopics = useMemo(() => {
+		const unique = Array.from(new Set(items.map((i) => i.topic.trim()))).filter(
+			(topic) => topic.length > 0,
+		);
+
+		return unique.sort((a, b) =>
+			a.localeCompare(b, undefined, { sensitivity: 'base' }),
+		);
+	}, [items]);
+
+	const filteredTopics = useMemo(() => {
+		const q = topicSearch.trim().toLowerCase();
+		if (!q) return sortedTopics;
+		return sortedTopics.filter((topic) => topic.toLowerCase().includes(q));
+	}, [sortedTopics, topicSearch]);
 
 	const fieldErrors = useMemo(() => {
 		return {
@@ -89,18 +110,26 @@ export default function EditScreen() {
 
 			if (data.length === 0) {
 				setSelectedId(null);
+				setTopicSearch('');
+				setComboOpen(false);
 				setForm({ topic: '', illus: '', application: '', sourceLink: '' });
 				return;
 			}
 
 			const stillExists =
 				selectedId !== null && data.some((item) => item.id === selectedId);
-			const nextSelected = stillExists
-				? (data.find((item) => item.id === selectedId) ?? data[0])
-				: data[0];
-
-			setSelectedId(nextSelected.id);
-			syncFormFromItem(nextSelected);
+			if (stillExists) {
+				const nextSelected = data.find((item) => item.id === selectedId);
+				setSelectedId(nextSelected?.id ?? null);
+				if (nextSelected) {
+					syncFormFromItem(nextSelected);
+					setTopicSearch(nextSelected.topic);
+				}
+			} else {
+				setSelectedId(null);
+				setTopicSearch('');
+				setForm({ topic: '', illus: '', application: '', sourceLink: '' });
+			}
 		} catch {
 			setErrorMessage('Failed to load illustrations for editing.');
 		} finally {
@@ -116,10 +145,49 @@ export default function EditScreen() {
 
 	const selectItem = (item: Illustration) => {
 		setSelectedId(item.id);
+		setTopicSearch(item.topic);
+		setComboOpen(false);
 		syncFormFromItem(item);
 		setErrorMessage(null);
 		setSuccessMessage(null);
 	};
+
+	// Phase 2.4 Step 5 controls: open/close, type-search, select, and clear.
+	const toggleCombo = useCallback(() => {
+		setComboOpen((open) => {
+			const next = !open;
+			if (next) {
+				setTopicSearch(selectedItem?.topic ?? '');
+			}
+			return next;
+		});
+	}, [selectedItem]);
+
+	const onComboFocus = useCallback(() => {
+		setComboOpen(true);
+		setTopicSearch(selectedItem?.topic ?? '');
+	}, [selectedItem]);
+
+	const onComboSearchChange = useCallback(
+		(value: string) => {
+			setComboOpen(true);
+			setTopicSearch(value);
+
+			if (selectedItem && value.trim() !== selectedItem.topic) {
+				setSelectedId(null);
+			}
+		},
+		[selectedItem],
+	);
+
+	const clearSelection = useCallback(() => {
+		setSelectedId(null);
+		setTopicSearch('');
+		setComboOpen(false);
+		setErrorMessage(null);
+		setSuccessMessage(null);
+		setForm({ topic: '', illus: '', application: '', sourceLink: '' });
+	}, []);
 
 	const updateField = (key: keyof UpdateIllustrationInput, value: string) => {
 		setForm((prev) => ({ ...prev, [key]: value }));
@@ -184,136 +252,164 @@ export default function EditScreen() {
 	};
 
 	return (
-		<ScrollView
-			contentContainerStyle={styles.scrollContent}
-			keyboardShouldPersistTaps="handled"
-		>
-			<View style={styles.screen}>
-				<Text style={styles.title}>Edit Illustration</Text>
-				<Text style={styles.subtitle}>
-					Select an existing item, update fields, then save changes.
-				</Text>
+		<View style={styles.screen}>
+			<Text style={styles.title}>Edit Illustration</Text>
+			<Text style={styles.subtitle}>
+				Select an existing item, update fields, then save changes.
+			</Text>
 
-				<Text style={styles.sectionTitle}>Choose Illustration</Text>
-				{loadingList && (
-					<ActivityIndicator size="small" style={styles.loader} />
-				)}
-				{!loadingList && items.length === 0 && (
-					<Text style={styles.empty}>No illustrations available to edit.</Text>
-				)}
+			<Text style={styles.sectionTitle}>Choose Illustration</Text>
+			{loadingList && <ActivityIndicator size="small" style={styles.loader} />}
+			{!loadingList && items.length === 0 && (
+				<Text style={styles.empty}>No illustrations available to edit.</Text>
+			)}
 
-				{!loadingList && items.length > 0 && (
-					<View style={styles.selectList}>
-						{items.map((item) => {
-							const isSelected = selectedId === item.id;
-							return (
+			{!loadingList && items.length > 0 && (
+				<View style={styles.comboContainer}>
+					<View style={styles.comboInput}>
+						<TextInput
+							ref={comboInputRef}
+							value={comboOpen ? topicSearch : (selectedItem?.topic ?? '')}
+							onFocus={onComboFocus}
+							onChangeText={onComboSearchChange}
+							placeholder="Select Topic"
+							style={styles.comboTextInput}
+							autoCapitalize="none"
+							autoCorrect={false}
+						/>
+						<View style={styles.comboInputActions}>
+							{(selectedItem || topicSearch) && (
 								<Pressable
-									key={item.id}
-									style={[
-										styles.selectItem,
-										isSelected && styles.selectItemSelected,
-									]}
-									onPress={() => selectItem(item)}
+									onPress={clearSelection}
+									style={styles.iconButton}
+									hitSlop={8}
 								>
-									<Text
-										style={[
-											styles.selectItemText,
-											isSelected && styles.selectItemTextSelected,
-										]}
-									>
-										{item.topic}
-									</Text>
+									<Text style={styles.iconButtonText}>X</Text>
 								</Pressable>
-							);
-						})}
+							)}
+							<Pressable onPress={toggleCombo} hitSlop={8}>
+								<Text style={styles.comboChevron}>{comboOpen ? '▲' : '▼'}</Text>
+							</Pressable>
+						</View>
 					</View>
-				)}
 
-				<Text style={styles.sectionTitle}>Edit Fields</Text>
+					{comboOpen && (
+						<View style={styles.comboDropdown}>
+							{filteredTopics.length === 0 ? (
+								<Text style={styles.comboEmpty}>No matching topics.</Text>
+							) : (
+								<FlatList
+									data={filteredTopics}
+									keyExtractor={(topic) => topic}
+									style={styles.comboList}
+									keyboardShouldPersistTaps="handled"
+									initialNumToRender={6}
+									renderItem={({ item }) => {
+										const match = items.find((row) => row.topic === item);
+										if (!match) return null;
 
-				<Text style={styles.label}>Topic</Text>
-				<TextInput
-					value={form.topic}
-					onChangeText={(value) => updateField('topic', value)}
-					placeholder="Enter topic"
-					style={styles.input}
-					editable={!!selectedItem}
-				/>
-				{fieldErrors.topic && selectedItem && (
-					<Text style={styles.validation}>{fieldErrors.topic}</Text>
-				)}
-
-				<Text style={styles.label}>Illustration</Text>
-				<TextInput
-					value={form.illus}
-					onChangeText={(value) => updateField('illus', value)}
-					placeholder="Enter illustration"
-					style={[styles.input, styles.multiLine]}
-					multiline
-					textAlignVertical="top"
-					editable={!!selectedItem}
-				/>
-				{fieldErrors.illus && selectedItem && (
-					<Text style={styles.validation}>{fieldErrors.illus}</Text>
-				)}
-
-				<Text style={styles.label}>Application</Text>
-				<TextInput
-					value={form.application}
-					onChangeText={(value) => updateField('application', value)}
-					placeholder="Enter application"
-					style={[styles.input, styles.multiLine]}
-					multiline
-					textAlignVertical="top"
-					editable={!!selectedItem}
-				/>
-				{fieldErrors.application && selectedItem && (
-					<Text style={styles.validation}>{fieldErrors.application}</Text>
-				)}
-
-				<Text style={styles.label}>Source</Text>
-				<TextInput
-					value={form.sourceLink}
-					onChangeText={(value) => updateField('sourceLink', value)}
-					placeholder="Enter source"
-					style={styles.input}
-					editable={!!selectedItem}
-				/>
-				{fieldErrors.sourceLink && selectedItem && (
-					<Text style={styles.validation}>{fieldErrors.sourceLink}</Text>
-				)}
-
-				{errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
-				{successMessage && <Text style={styles.success}>{successMessage}</Text>}
-
-				<Pressable
-					style={[
-						styles.saveButton,
-						(saving || !selectedItem || !isFormValid || !isDirty) &&
-							styles.saveButtonDisabled,
-					]}
-					onPress={handleSavePress}
-					disabled={saving || !selectedItem || !isFormValid || !isDirty}
-				>
-					{saving ? (
-						<ActivityIndicator color="#ffffff" />
-					) : (
-						<Text style={styles.saveButtonText}>Save Changes</Text>
+										return (
+											<Pressable
+												style={styles.comboOption}
+												onPress={() => selectItem(match)}
+											>
+												<Text style={styles.comboOptionText}>{item}</Text>
+											</Pressable>
+										);
+									}}
+								/>
+							)}
+						</View>
 					)}
-				</Pressable>
-			</View>
-		</ScrollView>
+				</View>
+			)}
+
+			<Text style={styles.sectionTitle}>Edit Fields</Text>
+
+			{selectedItem ? (
+				<>
+					<Text style={styles.label}>Topic</Text>
+					<TextInput
+						value={form.topic}
+						onChangeText={(value) => updateField('topic', value)}
+						placeholder="Enter topic"
+						style={styles.input}
+					/>
+					{fieldErrors.topic && (
+						<Text style={styles.validation}>{fieldErrors.topic}</Text>
+					)}
+
+					<Text style={styles.label}>Illustration</Text>
+					<TextInput
+						value={form.illus}
+						onChangeText={(value) => updateField('illus', value)}
+						placeholder="Enter illustration"
+						style={[styles.input, styles.multiLine]}
+						multiline
+						textAlignVertical="top"
+					/>
+					{fieldErrors.illus && (
+						<Text style={styles.validation}>{fieldErrors.illus}</Text>
+					)}
+
+					<Text style={styles.label}>Application</Text>
+					<TextInput
+						value={form.application}
+						onChangeText={(value) => updateField('application', value)}
+						placeholder="Enter application"
+						style={[styles.input, styles.multiLine]}
+						multiline
+						textAlignVertical="top"
+					/>
+					{fieldErrors.application && (
+						<Text style={styles.validation}>{fieldErrors.application}</Text>
+					)}
+
+					<Text style={styles.label}>Source</Text>
+					<TextInput
+						value={form.sourceLink}
+						onChangeText={(value) => updateField('sourceLink', value)}
+						placeholder="Enter source"
+						style={styles.input}
+					/>
+					{fieldErrors.sourceLink && (
+						<Text style={styles.validation}>{fieldErrors.sourceLink}</Text>
+					)}
+				</>
+			) : (
+				<Text style={styles.empty}>
+					Select an item from the dropdown to edit.
+				</Text>
+			)}
+
+			{errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
+			{successMessage && <Text style={styles.success}>{successMessage}</Text>}
+
+			<Pressable
+				style={[
+					styles.saveButton,
+					(saving || !selectedItem || !isFormValid || !isDirty) &&
+						styles.saveButtonDisabled,
+				]}
+				onPress={handleSavePress}
+				disabled={saving || !selectedItem || !isFormValid || !isDirty}
+			>
+				{saving ? (
+					<ActivityIndicator color="#ffffff" />
+				) : (
+					<Text style={styles.saveButtonText}>Save Changes</Text>
+				)}
+			</Pressable>
+		</View>
 	);
 }
 
 const styles = StyleSheet.create({
-	scrollContent: {
-		paddingBottom: 24,
-	},
 	screen: {
 		flex: 1,
 		paddingHorizontal: 16,
 		paddingTop: 14,
+		paddingBottom: 24,
 		backgroundColor: '#f6f7f9',
 	},
 	title: {
@@ -342,29 +438,76 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		marginBottom: 8,
 	},
-	selectList: {
-		gap: 8,
+	comboContainer: {
 		marginBottom: 10,
+		zIndex: 20,
 	},
-	selectItem: {
+	comboInput: {
 		backgroundColor: '#ffffff',
-		borderRadius: 10,
+		borderRadius: 12,
 		borderWidth: 1,
 		borderColor: '#d1d5db',
-		paddingVertical: 10,
 		paddingHorizontal: 12,
+		paddingVertical: 10,
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
 	},
-	selectItemSelected: {
-		borderColor: '#0f766e',
-		backgroundColor: '#ecfeff',
+	comboTextInput: {
+		flex: 1,
+		fontSize: 16,
+		color: '#111827',
 	},
-	selectItemText: {
-		color: '#1f2937',
+	comboInputActions: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+	},
+	comboChevron: {
+		fontSize: 12,
+		color: '#374151',
+	},
+	iconButton: {
+		width: 24,
+		height: 24,
+		borderRadius: 12,
+		borderWidth: 1,
+		borderColor: '#cbd5e1',
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: '#f8fafc',
+	},
+	iconButtonText: {
+		fontSize: 12,
+		fontWeight: '700',
+		color: '#334155',
+	},
+	comboDropdown: {
+		marginTop: 8,
+		backgroundColor: '#ffffff',
+		borderRadius: 12,
+		borderWidth: 1,
+		borderColor: '#d1d5db',
+		overflow: 'hidden',
+	},
+	comboList: {
+		maxHeight: 264,
+	},
+	comboOption: {
+		paddingHorizontal: 12,
+		paddingVertical: 11,
+		borderBottomWidth: 1,
+		borderBottomColor: '#f1f5f9',
+	},
+	comboOptionText: {
+		fontSize: 15,
+		color: '#111827',
+	},
+	comboEmpty: {
+		paddingHorizontal: 12,
+		paddingVertical: 14,
 		fontSize: 14,
-		fontWeight: '600',
-	},
-	selectItemTextSelected: {
-		color: '#0f766e',
+		color: '#6b7280',
 	},
 	label: {
 		fontSize: 13,
