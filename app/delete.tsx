@@ -1,5 +1,5 @@
 import { Href, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
 	Alert,
@@ -26,6 +26,7 @@ import { Illustration } from '../types/illustration';
  * - Returns to Home after successful delete.
  * - Phase 2.4 Step 3: Uses a Home-style combo-box for searchable selection.
  * - Phase 2.4 Step 4: Removes outer ScrollView to avoid nested VirtualizedList warning.
+ * - Phase 2.5.1 Step 1: Tapping the combo input box opens/focuses the dropdown.
  *
  * @returns {JSX.Element} The Delete route screen.
  */
@@ -120,9 +121,23 @@ export default function DeleteScreen() {
 		});
 	}, [selectedItem]);
 
-	const onComboFocus = useCallback(() => {
-		setComboOpen(true);
-		setTopicSearch(selectedItem?.topic ?? '');
+	useEffect(() => {
+		if (comboOpen) {
+			comboInputRef.current?.focus();
+		}
+	}, [comboOpen]);
+
+	const toggleComboFromZone = useCallback(() => {
+		setComboOpen((open) => {
+			const next = !open;
+			if (next) {
+				setTopicSearch(selectedItem?.topic ?? '');
+				comboInputRef.current?.focus();
+			} else {
+				comboInputRef.current?.blur();
+			}
+			return next;
+		});
 	}, [selectedItem]);
 
 	const onComboSearchChange = useCallback(
@@ -219,13 +234,18 @@ export default function DeleteScreen() {
 						<TextInput
 							ref={comboInputRef}
 							value={comboOpen ? topicSearch : (selectedItem?.topic ?? '')}
-							onFocus={onComboFocus}
 							onChangeText={onComboSearchChange}
 							placeholder="Select Topic"
 							style={styles.comboTextInput}
 							autoCapitalize="none"
 							autoCorrect={false}
 						/>
+						{!selectedItem && !topicSearch.trim() && (
+							<Pressable
+								style={styles.comboInputOpenZone}
+								onPress={toggleComboFromZone}
+							/>
+						)}
 						<View style={styles.comboInputActions}>
 							{(selectedItem || topicSearch) && (
 								<Pressable
@@ -365,6 +385,13 @@ const styles = StyleSheet.create({
 		flex: 1,
 		fontSize: 16,
 		color: '#111827',
+	},
+	comboInputOpenZone: {
+		position: 'absolute',
+		top: 0,
+		bottom: 0,
+		left: 96,
+		right: 30,
 	},
 	comboInputActions: {
 		flexDirection: 'row',

@@ -1,5 +1,5 @@
 import { Href, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
 	Alert,
@@ -20,6 +20,7 @@ import { Illustration } from '../types/illustration';
  * - Loads rows from the SQLite repository when the screen gains focus.
  * - Phase 2.4 Step 1: Topic combo-box with in-input search + selection reset.
  * - Phase 2.4 Step 2: Home cards use default A-Z ordering.
+ * - Phase 2.5.1 Step 1: Tapping the combo input box opens/focuses the dropdown.
  * - Uses explicit Keep/Undo prompts before navigation and search clear actions.
  *
  * @returns {JSX.Element} The Home/List screen.
@@ -136,6 +137,8 @@ export default function IndexScreen() {
 
 	// SECTION 7: Combo-box actions
 	// Phase 2.4 Step 1 controls: open/close, type-search, select, and clear.
+	const hasSelectedTopic = Boolean(selectedTopic);
+
 	const toggleCombo = useCallback(() => {
 		setComboOpen((open) => {
 			const next = !open;
@@ -145,6 +148,12 @@ export default function IndexScreen() {
 			return next;
 		});
 	}, [selectedTopic]);
+
+	useEffect(() => {
+		if (comboOpen) {
+			comboInputRef.current?.focus();
+		}
+	}, [comboOpen]);
 
 	const selectTopic = useCallback((topic: string) => {
 		setSelectedTopic(topic);
@@ -170,9 +179,17 @@ export default function IndexScreen() {
 		[selectedTopic],
 	);
 
-	const onComboFocus = useCallback(() => {
-		setComboOpen(true);
-		setTopicSearch(selectedTopic ?? '');
+	const toggleComboFromZone = useCallback(() => {
+		setComboOpen((open) => {
+			const next = !open;
+			if (next) {
+				setTopicSearch(selectedTopic ?? '');
+				comboInputRef.current?.focus();
+			} else {
+				comboInputRef.current?.blur();
+			}
+			return next;
+		});
 	}, [selectedTopic]);
 
 	// SECTION 9: Render
@@ -186,13 +203,18 @@ export default function IndexScreen() {
 					<TextInput
 						ref={comboInputRef}
 						value={comboOpen ? topicSearch : (selectedTopic ?? '')}
-						onFocus={onComboFocus}
 						onChangeText={onComboSearchChange}
 						placeholder="Select Topic"
 						style={styles.comboTextInput}
 						autoCapitalize="none"
 						autoCorrect={false}
 					/>
+					{!selectedTopic && !topicSearch.trim() && (
+						<Pressable
+							style={styles.comboInputOpenZone}
+							onPress={toggleComboFromZone}
+						/>
+					)}
 					<View style={styles.comboInputActions}>
 						{(selectedTopic || topicSearch) && (
 							<Pressable
@@ -319,6 +341,13 @@ const styles = StyleSheet.create({
 		flex: 1,
 		fontSize: 16,
 		color: '#111827',
+	},
+	comboInputOpenZone: {
+		position: 'absolute',
+		top: 0,
+		bottom: 0,
+		left: 96,
+		right: 30,
 	},
 	comboInputActions: {
 		flexDirection: 'row',
