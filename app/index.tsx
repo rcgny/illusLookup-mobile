@@ -1,8 +1,7 @@
-import { Href, useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
-	Alert,
 	FlatList,
 	Pressable,
 	StyleSheet,
@@ -21,7 +20,7 @@ import { Illustration } from '../types/illustration';
  * - Phase 2.4 Step 1: Topic combo-box with in-input search + selection reset.
  * - Phase 2.4 Step 2: Home cards use default A-Z ordering.
  * - Phase 2.5.1 Step 1: Tapping the combo input box opens/focuses the dropdown.
- * - Uses explicit Keep/Undo prompts before navigation and search clear actions.
+ * - Uses direct screen navigation from Home action buttons.
  *
  * @returns {JSX.Element} The Home/List screen.
  */
@@ -94,48 +93,7 @@ export default function IndexScreen() {
 		);
 	}, [selectedTopicItems]);
 
-	// SECTION 5: Keep/Undo prompt helper
-	// Any action that should be confirmed first can reuse this utility.
-	const withKeepUndoPrompt = useCallback(
-		(
-			title: string,
-			message: string,
-			onKeep: () => void,
-			onUndo?: () => void,
-		) => {
-			// Reusable confirmation helper to keep action prompts consistent.
-			Alert.alert(title, message, [
-				{
-					text: 'Undo',
-					style: 'cancel',
-					onPress: onUndo,
-				},
-				{
-					text: 'Keep',
-					onPress: onKeep,
-				},
-			]);
-		},
-		[],
-	);
-
-	// SECTION 6: Prompted route navigation
-	// Pressing action buttons does not navigate immediately; it asks the user to
-	// Keep (continue) or Undo (cancel).
-	const goWithPrompt = useCallback(
-		(route: Href) => {
-			// Route action is deferred until user explicitly confirms Keep.
-			withKeepUndoPrompt(
-				'Proceed to Screen',
-				`Keep this action and open ${route}?`,
-				() => router.push(route),
-				undefined,
-			);
-		},
-		[router, withKeepUndoPrompt],
-	);
-
-	// SECTION 7: Combo-box actions
+	// SECTION 5: Combo-box actions
 	// Phase 2.4 Step 1 controls: open/close, type-search, select, and clear.
 	const hasSelectedTopic = Boolean(selectedTopic);
 
@@ -192,7 +150,7 @@ export default function IndexScreen() {
 		});
 	}, [selectedTopic]);
 
-	// SECTION 9: Render
+	// SECTION 7: Render
 	// Layout order: title -> search -> action buttons -> status states -> list.
 	return (
 		<View style={styles.screen}>
@@ -259,19 +217,19 @@ export default function IndexScreen() {
 			<View style={styles.quickActionsRow}>
 				<Pressable
 					style={styles.actionBtn}
-					onPress={() => goWithPrompt('/create' as Href)}
+					onPress={() => router.push('/create')}
 				>
 					<Text style={styles.actionText}>Create</Text>
 				</Pressable>
 				<Pressable
 					style={styles.actionBtn}
-					onPress={() => goWithPrompt('/edit' as Href)}
+					onPress={() => router.push('/edit')}
 				>
 					<Text style={styles.actionText}>Edit</Text>
 				</Pressable>
 				<Pressable
 					style={styles.actionBtn}
-					onPress={() => goWithPrompt('/delete' as Href)}
+					onPress={() => router.push('/delete')}
 				>
 					<Text style={styles.actionText}>Delete</Text>
 				</Pressable>

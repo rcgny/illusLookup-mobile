@@ -16,5 +16,12 @@ export default function RootLayout() {
 		void initializeDatabase();
 	}, []);
 
-	return <Stack />;
+	return (
+		<Stack>
+			<Stack.Screen name="index" options={{ title: 'Home' }} />
+			<Stack.Screen name="create" options={{ title: 'Create' }} />
+			<Stack.Screen name="edit" options={{ title: 'Edit' }} />
+			<Stack.Screen name="delete" options={{ title: 'Delete' }} />
+		</Stack>
+	);
 }
