@@ -1,14 +1,14 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
 	FlatList,
 	Pressable,
 	StyleSheet,
 	Text,
-	TextInput,
 	View,
 } from 'react-native';
+import { TopicComboBox } from '../components/TopicComboBox';
 import { listIllustrations } from '../services/illustrationsRepo';
 import { Illustration } from '../types/illustration';
 
@@ -20,6 +20,8 @@ import { Illustration } from '../types/illustration';
  * - Phase 2.4 Step 1: Topic combo-box with in-input search + selection reset.
  * - Phase 2.4 Step 2: Home cards use default A-Z ordering.
  * - Phase 2.5.1 Step 1: Tapping the combo input box opens/focuses the dropdown.
+ * - Phase 2.5.2 Step 1: Uses shared TopicComboBox component.
+ * - Phase 2.5.3 Steps 2-3: Combo closes on outside tap and Android back/keyboard dismiss.
  * - Uses direct screen navigation from Home action buttons.
  *
  * @returns {JSX.Element} The Home/List screen.
@@ -35,7 +37,6 @@ export default function IndexScreen() {
 	const [comboOpen, setComboOpen] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const comboInputRef = useRef<TextInput | null>(null);
 
 	// SECTION 2: Data loading
 	// This function is the single source of truth for loading list data.
@@ -107,12 +108,6 @@ export default function IndexScreen() {
 		});
 	}, [selectedTopic]);
 
-	useEffect(() => {
-		if (comboOpen) {
-			comboInputRef.current?.focus();
-		}
-	}, [comboOpen]);
-
 	const selectTopic = useCallback((topic: string) => {
 		setSelectedTopic(topic);
 		setComboOpen(false);
@@ -142,13 +137,14 @@ export default function IndexScreen() {
 			const next = !open;
 			if (next) {
 				setTopicSearch(selectedTopic ?? '');
-				comboInputRef.current?.focus();
-			} else {
-				comboInputRef.current?.blur();
 			}
 			return next;
 		});
 	}, [selectedTopic]);
+
+	const closeCombo = useCallback(() => {
+		setComboOpen(false);
+	}, []);
 
 	// SECTION 7: Render
 	// Layout order: title -> search -> action buttons -> status states -> list.
@@ -156,63 +152,22 @@ export default function IndexScreen() {
 		<View style={styles.screen}>
 			<Text style={styles.title}>Illustrations</Text>
 
-			<View style={styles.comboContainer}>
-				<View style={styles.comboInput}>
-					<TextInput
-						ref={comboInputRef}
-						value={comboOpen ? topicSearch : (selectedTopic ?? '')}
-						onChangeText={onComboSearchChange}
-						placeholder="Select Topic"
-						style={styles.comboTextInput}
-						autoCapitalize="none"
-						autoCorrect={false}
-					/>
-					{!selectedTopic && !topicSearch.trim() && (
-						<Pressable
-							style={styles.comboInputOpenZone}
-							onPress={toggleComboFromZone}
-						/>
-					)}
-					<View style={styles.comboInputActions}>
-						{(selectedTopic || topicSearch) && (
-							<Pressable
-								onPress={clearSelection}
-								style={styles.iconButton}
-								hitSlop={8}
-							>
-								<Text style={styles.iconButtonText}>X</Text>
-							</Pressable>
-						)}
-						<Pressable onPress={toggleCombo} hitSlop={8}>
-							<Text style={styles.comboChevron}>{comboOpen ? '▲' : '▼'}</Text>
-						</Pressable>
-					</View>
-				</View>
-
-				{comboOpen && (
-					<View style={styles.comboDropdown}>
-						{filteredTopics.length === 0 ? (
-							<Text style={styles.comboEmpty}>No matching topics.</Text>
-						) : (
-							<FlatList
-								data={filteredTopics}
-								keyExtractor={(topic) => topic}
-								style={styles.comboList}
-								keyboardShouldPersistTaps="handled"
-								initialNumToRender={6}
-								renderItem={({ item }) => (
-									<Pressable
-										style={styles.comboOption}
-										onPress={() => selectTopic(item)}
-									>
-										<Text style={styles.comboOptionText}>{item}</Text>
-									</Pressable>
-								)}
-							/>
-						)}
-					</View>
-				)}
-			</View>
+			<TopicComboBox
+				value={comboOpen ? topicSearch : (selectedTopic ?? '')}
+				onChangeText={onComboSearchChange}
+				placeholder="Select Topic"
+				isOpen={comboOpen}
+				onToggle={toggleCombo}
+				onRequestClose={closeCombo}
+				onToggleFromZone={toggleComboFromZone}
+				options={filteredTopics}
+				onSelectOption={selectTopic}
+				showClear={Boolean(selectedTopic || topicSearch)}
+				onClear={clearSelection}
+				showOpenZone={!selectedTopic && !topicSearch.trim()}
+				emptyMessage="No matching topics."
+				containerStyle={styles.comboContainer}
+			/>
 
 			<View style={styles.quickActionsRow}>
 				<Pressable
@@ -283,80 +238,6 @@ const styles = StyleSheet.create({
 	comboContainer: {
 		marginBottom: 12,
 		zIndex: 20,
-	},
-	comboInput: {
-		backgroundColor: '#ffffff',
-		borderRadius: 12,
-		borderWidth: 1,
-		borderColor: '#d1d5db',
-		paddingHorizontal: 12,
-		paddingVertical: 10,
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-	},
-	comboTextInput: {
-		flex: 1,
-		fontSize: 16,
-		color: '#111827',
-	},
-	comboInputOpenZone: {
-		position: 'absolute',
-		top: 0,
-		bottom: 0,
-		left: 96,
-		right: 30,
-	},
-	comboInputActions: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		gap: 8,
-	},
-	comboChevron: {
-		fontSize: 12,
-		color: '#374151',
-	},
-	iconButton: {
-		width: 24,
-		height: 24,
-		borderRadius: 12,
-		borderWidth: 1,
-		borderColor: '#cbd5e1',
-		alignItems: 'center',
-		justifyContent: 'center',
-		backgroundColor: '#f8fafc',
-	},
-	iconButtonText: {
-		fontSize: 12,
-		fontWeight: '700',
-		color: '#334155',
-	},
-	comboDropdown: {
-		marginTop: 8,
-		backgroundColor: '#ffffff',
-		borderRadius: 12,
-		borderWidth: 1,
-		borderColor: '#d1d5db',
-		overflow: 'hidden',
-	},
-	comboList: {
-		maxHeight: 264,
-	},
-	comboOption: {
-		paddingHorizontal: 12,
-		paddingVertical: 11,
-		borderBottomWidth: 1,
-		borderBottomColor: '#f1f5f9',
-	},
-	comboOptionText: {
-		fontSize: 15,
-		color: '#111827',
-	},
-	comboEmpty: {
-		paddingHorizontal: 12,
-		paddingVertical: 14,
-		fontSize: 14,
-		color: '#6b7280',
 	},
 	quickActionsRow: {
 		flexDirection: 'row',

@@ -1,5 +1,5 @@
 import { Href, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
 	Alert,
@@ -10,6 +10,7 @@ import {
 	TextInput,
 	View,
 } from 'react-native';
+import { TopicComboBox } from '../components/TopicComboBox';
 import {
 	createIllustration,
 	listIllustrations,
@@ -27,6 +28,8 @@ import { CreateIllustrationInput } from '../types/illustration';
  * - Returns to Home screen after successful save.
  * - Phase 2.5.1 Step 1: Tapping the combo input box opens/focuses the dropdown.
  * - Phase 2.5.1 Step 2: Topic field supports choosing an existing topic or typing a new one.
+ * - Phase 2.5.2 Step 1: Uses shared TopicComboBox component.
+ * - Phase 2.5.3 Steps 2-3: Combo closes on outside tap and Android back/keyboard dismiss.
  *
  * @returns {JSX.Element} The Create route form screen.
  */
@@ -45,7 +48,6 @@ export default function CreateScreen() {
 	const [loading, setLoading] = useState(false);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [successMessage, setSuccessMessage] = useState<string | null>(null);
-	const comboInputRef = useRef<TextInput | null>(null);
 
 	const filteredTopics = useMemo(() => {
 		const q = form.topic.trim().toLowerCase();
@@ -71,12 +73,6 @@ export default function CreateScreen() {
 	const isFormValid = useMemo(() => {
 		return !Object.values(fieldErrors).some(Boolean);
 	}, [fieldErrors]);
-
-	useEffect(() => {
-		if (comboOpen) {
-			comboInputRef.current?.focus();
-		}
-	}, [comboOpen]);
 
 	const loadTopics = useCallback(async () => {
 		try {
@@ -110,15 +106,11 @@ export default function CreateScreen() {
 	}, []);
 
 	const toggleComboFromZone = useCallback(() => {
-		setComboOpen((open) => {
-			const next = !open;
-			if (next) {
-				comboInputRef.current?.focus();
-			} else {
-				comboInputRef.current?.blur();
-			}
-			return next;
-		});
+		setComboOpen((open) => !open);
+	}, []);
+
+	const closeCombo = useCallback(() => {
+		setComboOpen(false);
 	}, []);
 
 	const clearTopicSelection = useCallback(() => {
@@ -192,67 +184,30 @@ export default function CreateScreen() {
 				{loadingTopics && (
 					<ActivityIndicator size="small" style={styles.inlineLoader} />
 				)}
-				<View style={styles.comboContainer}>
-					<View style={styles.comboInput}>
-						<TextInput
-							ref={comboInputRef}
-							value={form.topic}
-							onChangeText={(value) => {
-								updateField('topic', value);
-								setComboOpen(true);
-							}}
-							placeholder="Select Topic"
-							style={styles.comboTextInput}
-							autoCapitalize="none"
-							autoCorrect={false}
-						/>
-						{!form.topic.trim() && (
-							<Pressable
-								style={styles.comboInputOpenZone}
-								onPress={toggleComboFromZone}
-							/>
-						)}
-						<View style={styles.comboInputActions}>
-							{!!form.topic && (
-								<Pressable
-									onPress={clearTopicSelection}
-									style={styles.iconButton}
-									hitSlop={8}
-								>
-									<Text style={styles.iconButtonText}>X</Text>
-								</Pressable>
-							)}
-							<Pressable onPress={toggleCombo} hitSlop={8}>
-								<Text style={styles.comboChevron}>{comboOpen ? '▲' : '▼'}</Text>
-							</Pressable>
-						</View>
-					</View>
-
-					{comboOpen && (
-						<View style={styles.comboDropdown}>
-							{displayedTopics.length === 0 ? (
-								<Text style={styles.comboEmpty}>No matching topics.</Text>
-							) : (
-								<>
-									{displayedTopics.map((topic) => (
-										<Pressable
-											key={topic}
-											style={styles.comboOption}
-											onPress={() => selectExistingTopic(topic)}
-										>
-											<Text style={styles.comboOptionText}>{topic}</Text>
-										</Pressable>
-									))}
-									{!form.topic.trim() && existingTopics.length > 6 && (
-										<Text style={styles.comboHint}>
-											Type to search more topics or enter a new one.
-										</Text>
-									)}
-								</>
-							)}
-						</View>
-					)}
-				</View>
+				<TopicComboBox
+					value={form.topic}
+					onChangeText={(value) => {
+						updateField('topic', value);
+						setComboOpen(true);
+					}}
+					placeholder="Select Topic"
+					isOpen={comboOpen}
+					onToggle={toggleCombo}
+					onRequestClose={closeCombo}
+					onToggleFromZone={toggleComboFromZone}
+					options={displayedTopics}
+					onSelectOption={selectExistingTopic}
+					showClear={Boolean(form.topic)}
+					onClear={clearTopicSelection}
+					showOpenZone={!form.topic.trim()}
+					emptyMessage="No matching topics."
+					hintMessage={
+						!form.topic.trim() && existingTopics.length > 6
+							? 'Type to search more topics or enter a new one.'
+							: undefined
+					}
+					containerStyle={styles.comboContainer}
+				/>
 				{fieldErrors.topic && (
 					<Text style={styles.validation}>{fieldErrors.topic}</Text>
 				)}
@@ -350,85 +305,6 @@ const styles = StyleSheet.create({
 	comboContainer: {
 		marginBottom: 2,
 		zIndex: 20,
-	},
-	comboInput: {
-		backgroundColor: '#ffffff',
-		borderRadius: 12,
-		borderWidth: 1,
-		borderColor: '#d1d5db',
-		paddingVertical: 10,
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		paddingLeft: 12,
-		paddingRight: 8,
-	},
-	comboTextInput: {
-		flex: 1,
-		fontSize: 16,
-		color: '#111827',
-	},
-	comboInputOpenZone: {
-		position: 'absolute',
-		top: 0,
-		bottom: 0,
-		left: 96,
-		right: 30,
-	},
-	comboInputActions: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		gap: 8,
-	},
-	comboChevron: {
-		fontSize: 12,
-		color: '#374151',
-	},
-	iconButton: {
-		width: 24,
-		height: 24,
-		borderRadius: 12,
-		borderWidth: 1,
-		borderColor: '#cbd5e1',
-		alignItems: 'center',
-		justifyContent: 'center',
-		backgroundColor: '#f8fafc',
-	},
-	iconButtonText: {
-		fontSize: 12,
-		fontWeight: '700',
-		color: '#334155',
-	},
-	comboDropdown: {
-		marginTop: 8,
-		backgroundColor: '#ffffff',
-		borderRadius: 12,
-		borderWidth: 1,
-		borderColor: '#d1d5db',
-		overflow: 'hidden',
-	},
-	comboOption: {
-		paddingHorizontal: 12,
-		paddingVertical: 11,
-		borderBottomWidth: 1,
-		borderBottomColor: '#f1f5f9',
-	},
-	comboOptionText: {
-		fontSize: 15,
-		color: '#111827',
-	},
-	comboEmpty: {
-		paddingHorizontal: 12,
-		paddingVertical: 14,
-		fontSize: 14,
-		color: '#6b7280',
-	},
-	comboHint: {
-		paddingHorizontal: 12,
-		paddingVertical: 10,
-		fontSize: 13,
-		color: '#6b7280',
-		fontStyle: 'italic',
 	},
 	input: {
 		backgroundColor: '#ffffff',

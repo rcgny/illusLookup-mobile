@@ -1,15 +1,14 @@
 import { Href, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
 	Alert,
-	FlatList,
 	Pressable,
 	StyleSheet,
 	Text,
-	TextInput,
 	View,
 } from 'react-native';
+import { TopicComboBox } from '../components/TopicComboBox';
 import {
 	deleteIllustration,
 	listIllustrations,
@@ -27,6 +26,8 @@ import { Illustration } from '../types/illustration';
  * - Phase 2.4 Step 3: Uses a Home-style combo-box for searchable selection.
  * - Phase 2.4 Step 4: Removes outer ScrollView to avoid nested VirtualizedList warning.
  * - Phase 2.5.1 Step 1: Tapping the combo input box opens/focuses the dropdown.
+ * - Phase 2.5.2 Step 1: Uses shared TopicComboBox component.
+ * - Phase 2.5.3 Steps 2-3: Combo closes on outside tap and Android back/keyboard dismiss.
  *
  * @returns {JSX.Element} The Delete route screen.
  */
@@ -41,7 +42,6 @@ export default function DeleteScreen() {
 	const [deleting, setDeleting] = useState(false);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [successMessage, setSuccessMessage] = useState<string | null>(null);
-	const comboInputRef = useRef<TextInput | null>(null);
 
 	const selectedItem =
 		selectedId === null
@@ -121,24 +121,19 @@ export default function DeleteScreen() {
 		});
 	}, [selectedItem]);
 
-	useEffect(() => {
-		if (comboOpen) {
-			comboInputRef.current?.focus();
-		}
-	}, [comboOpen]);
-
 	const toggleComboFromZone = useCallback(() => {
 		setComboOpen((open) => {
 			const next = !open;
 			if (next) {
 				setTopicSearch(selectedItem?.topic ?? '');
-				comboInputRef.current?.focus();
-			} else {
-				comboInputRef.current?.blur();
 			}
 			return next;
 		});
 	}, [selectedItem]);
+
+	const closeCombo = useCallback(() => {
+		setComboOpen(false);
+	}, []);
 
 	const onComboSearchChange = useCallback(
 		(value: string) => {
@@ -229,68 +224,26 @@ export default function DeleteScreen() {
 			)}
 
 			{!loadingList && items.length > 0 && (
-				<View style={styles.comboContainer}>
-					<View style={styles.comboInput}>
-						<TextInput
-							ref={comboInputRef}
-							value={comboOpen ? topicSearch : (selectedItem?.topic ?? '')}
-							onChangeText={onComboSearchChange}
-							placeholder="Select Topic"
-							style={styles.comboTextInput}
-							autoCapitalize="none"
-							autoCorrect={false}
-						/>
-						{!selectedItem && !topicSearch.trim() && (
-							<Pressable
-								style={styles.comboInputOpenZone}
-								onPress={toggleComboFromZone}
-							/>
-						)}
-						<View style={styles.comboInputActions}>
-							{(selectedItem || topicSearch) && (
-								<Pressable
-									onPress={clearSelection}
-									style={styles.iconButton}
-									hitSlop={8}
-								>
-									<Text style={styles.iconButtonText}>X</Text>
-								</Pressable>
-							)}
-							<Pressable onPress={toggleCombo} hitSlop={8}>
-								<Text style={styles.comboChevron}>{comboOpen ? '▲' : '▼'}</Text>
-							</Pressable>
-						</View>
-					</View>
-
-					{comboOpen && (
-						<View style={styles.comboDropdown}>
-							{filteredTopics.length === 0 ? (
-								<Text style={styles.comboEmpty}>No matching topics.</Text>
-							) : (
-								<FlatList
-									data={filteredTopics}
-									keyExtractor={(topic) => topic}
-									style={styles.comboList}
-									keyboardShouldPersistTaps="handled"
-									initialNumToRender={6}
-									renderItem={({ item }) => {
-										const match = items.find((row) => row.topic === item);
-										if (!match) return null;
-
-										return (
-											<Pressable
-												style={styles.comboOption}
-												onPress={() => handleSelect(match.id, match.topic)}
-											>
-												<Text style={styles.comboOptionText}>{item}</Text>
-											</Pressable>
-										);
-									}}
-								/>
-							)}
-						</View>
-					)}
-				</View>
+				<TopicComboBox
+					value={comboOpen ? topicSearch : (selectedItem?.topic ?? '')}
+					onChangeText={onComboSearchChange}
+					placeholder="Select Topic"
+					isOpen={comboOpen}
+					onToggle={toggleCombo}
+					onRequestClose={closeCombo}
+					onToggleFromZone={toggleComboFromZone}
+					options={filteredTopics}
+					onSelectOption={(topic) => {
+						const match = items.find((row) => row.topic === topic);
+						if (!match) return;
+						handleSelect(match.id, match.topic);
+					}}
+					showClear={Boolean(selectedItem || topicSearch)}
+					onClear={clearSelection}
+					showOpenZone={!selectedItem && !topicSearch.trim()}
+					emptyMessage="No matching topics."
+					containerStyle={styles.comboContainer}
+				/>
 			)}
 
 			<Text style={styles.sectionTitle}>Selected Preview</Text>
@@ -369,80 +322,6 @@ const styles = StyleSheet.create({
 	comboContainer: {
 		marginBottom: 10,
 		zIndex: 20,
-	},
-	comboInput: {
-		backgroundColor: '#ffffff',
-		borderRadius: 12,
-		borderWidth: 1,
-		borderColor: '#d1d5db',
-		paddingHorizontal: 12,
-		paddingVertical: 10,
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-	},
-	comboTextInput: {
-		flex: 1,
-		fontSize: 16,
-		color: '#111827',
-	},
-	comboInputOpenZone: {
-		position: 'absolute',
-		top: 0,
-		bottom: 0,
-		left: 96,
-		right: 30,
-	},
-	comboInputActions: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		gap: 8,
-	},
-	comboChevron: {
-		fontSize: 12,
-		color: '#374151',
-	},
-	iconButton: {
-		width: 24,
-		height: 24,
-		borderRadius: 12,
-		borderWidth: 1,
-		borderColor: '#cbd5e1',
-		alignItems: 'center',
-		justifyContent: 'center',
-		backgroundColor: '#f8fafc',
-	},
-	iconButtonText: {
-		fontSize: 12,
-		fontWeight: '700',
-		color: '#334155',
-	},
-	comboDropdown: {
-		marginTop: 8,
-		backgroundColor: '#ffffff',
-		borderRadius: 12,
-		borderWidth: 1,
-		borderColor: '#d1d5db',
-		overflow: 'hidden',
-	},
-	comboList: {
-		maxHeight: 264,
-	},
-	comboOption: {
-		paddingHorizontal: 12,
-		paddingVertical: 11,
-		borderBottomWidth: 1,
-		borderBottomColor: '#f1f5f9',
-	},
-	comboOptionText: {
-		fontSize: 15,
-		color: '#111827',
-	},
-	comboEmpty: {
-		paddingHorizontal: 12,
-		paddingVertical: 14,
-		fontSize: 14,
-		color: '#6b7280',
 	},
 	previewCard: {
 		backgroundColor: '#ffffff',
