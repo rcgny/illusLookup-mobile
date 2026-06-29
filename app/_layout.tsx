@@ -22,6 +22,10 @@ export default function RootLayout() {
 			<Stack.Screen name="create" options={{ title: 'Create' }} />
 			<Stack.Screen name="edit" options={{ title: 'Edit' }} />
 			<Stack.Screen name="delete" options={{ title: 'Delete' }} />
+			<Stack.Screen
+				name="illustration/[id]"
+				options={{ title: 'Illustration Details' }}
+			/>
 		</Stack>
 	);
 }

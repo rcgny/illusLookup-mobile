@@ -96,8 +96,6 @@ export default function IndexScreen() {
 
 	// SECTION 5: Combo-box actions
 	// Phase 2.4 Step 1 controls: open/close, type-search, select, and clear.
-	const hasSelectedTopic = Boolean(selectedTopic);
-
 	const toggleCombo = useCallback(() => {
 		setComboOpen((open) => {
 			const next = !open;
@@ -145,6 +143,14 @@ export default function IndexScreen() {
 	const closeCombo = useCallback(() => {
 		setComboOpen(false);
 	}, []);
+
+	// Phase 2.6.1 Step 2: Open fullscreen read-only illustration card.
+	const openReadOnlyCard = useCallback(
+		(id: number) => {
+			router.push(`/illustration/${id}`);
+		},
+		[router],
+	);
 
 	// SECTION 7: Render
 	// Layout order: title -> search -> action buttons -> status states -> list.
@@ -203,7 +209,10 @@ export default function IndexScreen() {
 					keyExtractor={(item) => String(item.id)}
 					contentContainerStyle={styles.listContent}
 					renderItem={({ item }) => (
-						<View style={styles.card}>
+						<Pressable
+							style={styles.card}
+							onPress={() => openReadOnlyCard(item.id)}
+						>
 							<Text style={styles.topic}>{item.topic}</Text>
 
 							<Text style={styles.label}>Illustration</Text>
@@ -214,7 +223,7 @@ export default function IndexScreen() {
 
 							<Text style={styles.label}>Source</Text>
 							<Text style={styles.source}>{item.sourceLink}</Text>
-						</View>
+						</Pressable>
 					)}
 				/>
 			)}

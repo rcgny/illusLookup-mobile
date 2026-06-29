@@ -36,6 +36,35 @@ export async function listIllustrations(): Promise<Illustration[]> {
 }
 
 /**
+ * Returns one illustration by id.
+ *
+ * Phase 2.6.1 Step 1:
+ * - Adds read-only detail lookup for the fullscreen illustration card route.
+ *
+ * @param {number} id Illustration id to fetch.
+ * @returns {Promise<Illustration | null>} Matching row or null when not found.
+ */
+export async function getIllustrationById(
+	id: number,
+): Promise<Illustration | null> {
+	await initializeDatabase();
+	const db = await getDb();
+
+	if (!Number.isFinite(id) || id <= 0) {
+		throw new Error('A valid illustration id is required.');
+	}
+
+	const row = await db.getFirstAsync<Illustration>(
+		`SELECT id, topic, illus, application, sourceLink, createdAt, updatedAt
+		 FROM illustrations
+		 WHERE id = ?`,
+		[id],
+	);
+
+	return row ?? null;
+}
+
+/**
  * Creates and returns a new illustration row.
  *
  * Phase 2.2 implementation notes:
