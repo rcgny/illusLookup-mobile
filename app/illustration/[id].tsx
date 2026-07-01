@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
@@ -17,11 +17,15 @@ import { Illustration } from '../../types/illustration';
  *
  * Phase 2.6.1 Step 1:
  * - Adds a dedicated details screen for a single illustration.
- * - Preserves read-only behavior (no edit/delete actions on this route).
+ * - Preserves read-only data rendering for the selected item.
+ *
+ * Phase 2.6.3 Step 1:
+ * - Adds minimal Edit/Delete actions that pass the current id to target routes.
  *
  * @returns {JSX.Element} Read-only details screen for one illustration.
  */
 export default function IllustrationDetailsScreen() {
+	const router = useRouter();
 	const params = useLocalSearchParams<{ id?: string | string[] }>();
 	const [item, setItem] = useState<Illustration | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -71,6 +75,18 @@ export default function IllustrationDetailsScreen() {
 		await Linking.openURL(item.sourceLink);
 	};
 
+	const handleEditPress = () => {
+		if (!item) return;
+		// Phase 2.6.3 Step 1: Start detail -> edit transition by forwarding selected id.
+		router.push(`/edit?id=${item.id}` as Href);
+	};
+
+	const handleDeletePress = () => {
+		if (!item) return;
+		// Phase 2.6.3 Step 1: Start detail -> delete transition by forwarding selected id.
+		router.push(`/delete?id=${item.id}` as Href);
+	};
+
 	if (loading) {
 		return (
 			<View style={styles.centerState}>
@@ -117,6 +133,15 @@ export default function IllustrationDetailsScreen() {
 
 				<Text style={styles.meta}>Created: {item.createdAt}</Text>
 				<Text style={styles.meta}>Updated: {item.updatedAt}</Text>
+
+				<View style={styles.actionRow}>
+					<Pressable style={styles.editButton} onPress={handleEditPress}>
+						<Text style={styles.actionButtonText}>Edit</Text>
+					</Pressable>
+					<Pressable style={styles.deleteButton} onPress={handleDeletePress}>
+						<Text style={styles.actionButtonText}>Delete</Text>
+					</Pressable>
+				</View>
 			</View>
 		</ScrollView>
 	);
@@ -168,6 +193,30 @@ const styles = StyleSheet.create({
 		fontSize: 12,
 		color: '#6b7280',
 		marginTop: 10,
+	},
+	actionRow: {
+		marginTop: 16,
+		flexDirection: 'row',
+		gap: 10,
+	},
+	editButton: {
+		flex: 1,
+		backgroundColor: '#0f766e',
+		borderRadius: 10,
+		paddingVertical: 10,
+		alignItems: 'center',
+	},
+	deleteButton: {
+		flex: 1,
+		backgroundColor: '#b91c1c',
+		borderRadius: 10,
+		paddingVertical: 10,
+		alignItems: 'center',
+	},
+	actionButtonText: {
+		fontSize: 14,
+		fontWeight: '700',
+		color: '#ffffff',
 	},
 	centerState: {
 		flex: 1,

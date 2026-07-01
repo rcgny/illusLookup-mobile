@@ -1,4 +1,9 @@
-import { Href, useFocusEffect, useRouter } from 'expo-router';
+import {
+	Href,
+	useFocusEffect,
+	useLocalSearchParams,
+	useRouter,
+} from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
@@ -28,20 +33,31 @@ import { Illustration } from '../types/illustration';
  * - Phase 2.5.1 Step 1: Tapping the combo input box opens/focuses the dropdown.
  * - Phase 2.5.2 Step 1: Uses shared TopicComboBox component.
  * - Phase 2.5.3 Steps 2-3: Combo closes on outside tap and Android back/keyboard dismiss.
+ * - Phase 2.6.3 Step 3: Supports one-time prefill selection from optional route id.
  *
  * @returns {JSX.Element} The Delete route screen.
  */
 export default function DeleteScreen() {
 	// SECTION 1: Router + state
 	const router = useRouter();
+	const params = useLocalSearchParams<{ id?: string | string[] }>();
 	const [items, setItems] = useState<Illustration[]>([]);
 	const [selectedId, setSelectedId] = useState<number | null>(null);
 	const [topicSearch, setTopicSearch] = useState('');
 	const [comboOpen, setComboOpen] = useState(false);
+	const [routePrefillApplied, setRoutePrefillApplied] = useState(false);
 	const [loadingList, setLoadingList] = useState(true);
 	const [deleting, setDeleting] = useState(false);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+	const routeDeleteId = useMemo(() => {
+		const idParam = Array.isArray(params.id) ? params.id[0] : params.id;
+		if (!idParam) return null;
+		const parsed = Number(idParam);
+		if (!Number.isFinite(parsed) || parsed <= 0) return null;
+		return parsed;
+	}, [params.id]);
 
 	const selectedItem =
 		selectedId === null
@@ -80,6 +96,24 @@ export default function DeleteScreen() {
 				return;
 			}
 
+			if (!routePrefillApplied) {
+				// Phase 2.6.3 Step 3: Apply detail-route id prefill once, then keep manual delete flow unchanged.
+				const routeMatch =
+					routeDeleteId === null
+						? null
+						: (data.find((item) => item.id === routeDeleteId) ?? null);
+
+				if (routeMatch) {
+					setSelectedId(routeMatch.id);
+					setTopicSearch(routeMatch.topic);
+					setComboOpen(false);
+					setRoutePrefillApplied(true);
+					return;
+				}
+
+				setRoutePrefillApplied(true);
+			}
+
 			const stillExists =
 				selectedId !== null && data.some((item) => item.id === selectedId);
 			setSelectedId(stillExists ? selectedId : null);
@@ -95,7 +129,7 @@ export default function DeleteScreen() {
 		} finally {
 			setLoadingList(false);
 		}
-	}, [selectedId]);
+	}, [routeDeleteId, routePrefillApplied, selectedId]);
 
 	useFocusEffect(
 		useCallback(() => {

@@ -1,4 +1,9 @@
-import { Href, useFocusEffect, useRouter } from 'expo-router';
+import {
+	Href,
+	useFocusEffect,
+	useLocalSearchParams,
+	useRouter,
+} from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
@@ -29,15 +34,19 @@ import { Illustration, UpdateIllustrationInput } from '../types/illustration';
  * - Phase 2.5.1 Step 1: Tapping the combo input box opens/focuses the dropdown.
  * - Phase 2.5.2 Step 1: Uses shared TopicComboBox component.
  * - Phase 2.5.3 Steps 2-3: Combo closes on outside tap and Android back/keyboard dismiss.
+ * - Phase 2.6.3 Step 1: Supports optional prefill from route id for one-time selection. ( In [id].tsx)
+ * - Phase 2.6.3 Step 2: Supports one-time prefill selection from optional route id.
  *
  * @returns {JSX.Element} The Edit route screen.
  */
 export default function EditScreen() {
 	const router = useRouter();
+	const params = useLocalSearchParams<{ id?: string | string[] }>();
 	const [items, setItems] = useState<Illustration[]>([]);
 	const [selectedId, setSelectedId] = useState<number | null>(null);
 	const [topicSearch, setTopicSearch] = useState('');
 	const [comboOpen, setComboOpen] = useState(false);
+	const [routePrefillApplied, setRoutePrefillApplied] = useState(false);
 	const [form, setForm] = useState<UpdateIllustrationInput>({
 		topic: '',
 		illus: '',
@@ -53,6 +62,14 @@ export default function EditScreen() {
 		if (selectedId === null) return null;
 		return items.find((item) => item.id === selectedId) ?? null;
 	}, [items, selectedId]);
+
+	const routeEditId = useMemo(() => {
+		const idParam = Array.isArray(params.id) ? params.id[0] : params.id;
+		if (!idParam) return null;
+		const parsed = Number(idParam);
+		if (!Number.isFinite(parsed) || parsed <= 0) return null;
+		return parsed;
+	}, [params.id]);
 
 	const sortedTopics = useMemo(() => {
 		const unique = Array.from(new Set(items.map((i) => i.topic.trim()))).filter(
@@ -117,6 +134,25 @@ export default function EditScreen() {
 				return;
 			}
 
+			if (!routePrefillApplied) {
+				// Phase 2.6.3 Step 2: Apply detail-route id prefill once, then keep manual edit flow unchanged.
+				const routeMatch =
+					routeEditId === null
+						? null
+						: (data.find((item) => item.id === routeEditId) ?? null);
+
+				if (routeMatch) {
+					setSelectedId(routeMatch.id);
+					syncFormFromItem(routeMatch);
+					setTopicSearch(routeMatch.topic);
+					setComboOpen(false);
+					setRoutePrefillApplied(true);
+					return;
+				}
+
+				setRoutePrefillApplied(true);
+			}
+
 			const stillExists =
 				selectedId !== null && data.some((item) => item.id === selectedId);
 			if (stillExists) {
@@ -136,7 +172,7 @@ export default function EditScreen() {
 		} finally {
 			setLoadingList(false);
 		}
-	}, [selectedId, syncFormFromItem]);
+	}, [routeEditId, routePrefillApplied, selectedId, syncFormFromItem]);
 
 	useFocusEffect(
 		useCallback(() => {
