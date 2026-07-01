@@ -2,7 +2,6 @@ import { Href, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
-	Alert,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -23,7 +22,7 @@ import { CreateIllustrationInput } from '../types/illustration';
  * Phase 2.2 behaviors:
  * - Collects form input using controlled TextInput fields.
  * - Validates required values before insert.
- * - Uses Keep/Undo confirmation before saving.
+ * - Saves immediately after validation passes.
  * - Persists to SQLite through repository boundary.
  * - Returns to Home screen after successful save.
  * - Phase 2.5.1 Step 1: Tapping the combo input box opens/focuses the dropdown.
@@ -123,7 +122,7 @@ export default function CreateScreen() {
 		setComboOpen(false);
 	}, []);
 
-	// SECTION 4: Confirmed save flow (Keep/Undo)
+	// SECTION 4: Save flow
 	const runSave = async () => {
 		try {
 			setLoading(true);
@@ -154,18 +153,8 @@ export default function CreateScreen() {
 			return;
 		}
 
-		Alert.alert('Confirm Save', 'Keep this new illustration and save it?', [
-			{
-				text: 'Undo',
-				style: 'cancel',
-			},
-			{
-				text: 'Keep',
-				onPress: () => {
-					void runSave();
-				},
-			},
-		]);
+		// Phase 2.6.2 Step 1: Save runs immediately after validation without a Keep/Undo prompt.
+		void runSave();
 	};
 
 	return (

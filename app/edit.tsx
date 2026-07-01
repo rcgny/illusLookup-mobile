@@ -2,7 +2,6 @@ import { Href, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
-	Alert,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -23,7 +22,7 @@ import { Illustration, UpdateIllustrationInput } from '../types/illustration';
  * - Loads existing rows and lets user select which one to edit.
  * - Prefills editable form from selected row.
  * - Validates required values before update.
- * - Uses Keep/Undo confirmation before persisting changes.
+ * - Saves immediately after validation and dirty-state checks.
  * - Returns to Home after successful update.
  * - Phase 2.4 Step 5: Uses a Home-style combo-box for searchable selection.
  * - Phase 2.4 Step 6: Uses non-ScrollView outer container to avoid nested list warnings.
@@ -248,18 +247,8 @@ export default function EditScreen() {
 			return;
 		}
 
-		Alert.alert('Confirm Update', 'Keep these changes and update the record?', [
-			{
-				text: 'Undo',
-				style: 'cancel',
-			},
-			{
-				text: 'Keep',
-				onPress: () => {
-					void runSave();
-				},
-			},
-		]);
+		// Phase 2.6.2 Step 2: Update runs immediately after validation without a Keep/Undo prompt.
+		void runSave();
 	};
 
 	return (
