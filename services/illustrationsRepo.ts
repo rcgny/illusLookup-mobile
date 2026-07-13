@@ -5,6 +5,13 @@ import {
 	UpdateIllustrationInput,
 } from '../types/illustration';
 
+export type ListIllustrationsOptions = {
+	topic?: string | null;
+	searchText?: string;
+	sortBy?: 'topic' | 'createdAt' | 'updatedAt';
+	sortDir?: 'ASC' | 'DESC';
+};
+
 /**
  * Learning-project repository boundary for illustration queries.
  *
@@ -19,17 +26,59 @@ import {
  * Phase 2.1 implementation notes:
  * - Ensure schema is initialized before querying.
  * - Read directly from SQLite instead of in-memory demo rows.
+ * - Phase 2.7 Step 1: Support optional DB-level filtering and sorting.
  *
  * @returns {Promise<Illustration[]>} A promise containing the list data.
  */
-export async function listIllustrations(): Promise<Illustration[]> {
+export async function listIllustrations(
+	options: ListIllustrationsOptions = {},
+): Promise<Illustration[]> {
 	await initializeDatabase();
 	const db = await getDb();
+	const topic = options.topic?.trim() ?? '';
+	const searchText = options.searchText?.trim() ?? '';
+
+	const orderColumns: Record<
+		NonNullable<ListIllustrationsOptions['sortBy']>,
+		string
+	> = {
+		topic: 'topic COLLATE NOCASE',
+		createdAt: 'createdAt',
+		updatedAt: 'updatedAt',
+	};
+
+	const requestedSortBy = options.sortBy ?? 'topic';
+	const orderColumn = orderColumns[requestedSortBy] ?? orderColumns.topic;
+	const requestedSortDir = options.sortDir ?? 'ASC';
+	const orderDirection = requestedSortDir === 'DESC' ? 'DESC' : 'ASC';
+
+	const whereClauses: string[] = [];
+	const params: (string | number)[] = [];
+
+	if (topic) {
+		whereClauses.push('topic = ? COLLATE NOCASE');
+		params.push(topic);
+	}
+
+	if (searchText) {
+		const likePattern = `%${searchText}%`;
+		whereClauses.push(
+			'(topic LIKE ? COLLATE NOCASE OR illus LIKE ? COLLATE NOCASE OR application LIKE ? COLLATE NOCASE)',
+		);
+		params.push(likePattern, likePattern, likePattern);
+	}
+
+	// Phase 2.7 Step 1: Optional DB-level filtering/sorting for Home findability.
+	const whereSql = whereClauses.length
+		? `WHERE ${whereClauses.join(' AND ')}`
+		: '';
 
 	const rows = await db.getAllAsync<Illustration>(
 		`SELECT id, topic, illus, application, sourceLink, createdAt, updatedAt
 		 FROM illustrations
-		 ORDER BY topic COLLATE NOCASE ASC`,
+		 ${whereSql}
+		 ORDER BY ${orderColumn} ${orderDirection}`,
+		params,
 	);
 
 	return rows;
