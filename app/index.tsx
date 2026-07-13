@@ -66,7 +66,10 @@ export default function IndexScreen() {
 			setKeywordSearch('');
 			setSortMode('az');
 			setComboOpen(false);
-		}, []),
+
+			// Phase 2.7 Step 4: Always refresh Home data on focus, even when defaults are unchanged.
+			void load();
+		}, [load]),
 	);
 
 	useEffect(() => {
