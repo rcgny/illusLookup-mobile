@@ -32,8 +32,8 @@ export default function IndexScreen() {
 	// State values track fetched data, UI status, and topic combo-box input.
 	const router = useRouter();
 	const [items, setItems] = useState<Illustration[]>([]);
-	const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
-	const [topicSearch, setTopicSearch] = useState('');
+	const [keywordSearch, setKeywordSearch] = useState('');
+	const [sortMode, setSortMode] = useState<'newest' | 'az'>('az');
 	const [comboOpen, setComboOpen] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -45,14 +45,19 @@ export default function IndexScreen() {
 		try {
 			setLoading(true);
 			setError(null);
-			const data = await listIllustrations();
+			// Phase 2.7 Step 2: Use one search input to query topic/illustration/application.
+			const data = await listIllustrations({
+				searchText: keywordSearch,
+				sortBy: sortMode === 'newest' ? 'updatedAt' : 'topic',
+				sortDir: sortMode === 'newest' ? 'DESC' : 'ASC',
+			});
 			setItems(data);
 		} catch {
 			setError('Failed to load illustrations.');
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [keywordSearch, sortMode]);
 
 	// SECTION 3: Refresh behavior
 	// Re-runs load whenever this screen gets focus (for example, after returning
@@ -78,67 +83,42 @@ export default function IndexScreen() {
 	}, [items]);
 
 	const filteredTopics = useMemo(() => {
-		const q = topicSearch.trim().toLowerCase();
-		if (!q) return sortedTopics;
-		return sortedTopics.filter((topic) => topic.toLowerCase().includes(q));
-	}, [sortedTopics, topicSearch]);
-
-	const selectedTopicItems = useMemo(() => {
-		if (!selectedTopic) return items;
-		return items.filter((item) => item.topic === selectedTopic);
-	}, [items, selectedTopic]);
+		// Phase 2.7 Step 2: Dropdown shows topics from current result set.
+		return sortedTopics;
+	}, [sortedTopics]);
 
 	const visibleItems = useMemo(() => {
-		return [...selectedTopicItems].sort((a, b) =>
-			a.topic.localeCompare(b.topic, undefined, { sensitivity: 'base' }),
-		);
-	}, [selectedTopicItems]);
+		return items;
+	}, [items]);
 
 	// SECTION 5: Combo-box actions
 	// Phase 2.4 Step 1 controls: open/close, type-search, select, and clear.
 	const toggleCombo = useCallback(() => {
 		setComboOpen((open) => {
-			const next = !open;
-			if (next) {
-				setTopicSearch(selectedTopic ?? '');
-			}
-			return next;
+			return !open;
 		});
-	}, [selectedTopic]);
+	}, []);
 
 	const selectTopic = useCallback((topic: string) => {
-		setSelectedTopic(topic);
+		setKeywordSearch(topic);
 		setComboOpen(false);
-		setTopicSearch(topic);
 	}, []);
 
 	const clearSelection = useCallback(() => {
-		setSelectedTopic(null);
-		setTopicSearch('');
+		setKeywordSearch('');
 		setComboOpen(false);
 	}, []);
 
-	const onComboSearchChange = useCallback(
-		(value: string) => {
-			setComboOpen(true);
-			setTopicSearch(value);
-
-			if (selectedTopic && value.trim() !== selectedTopic) {
-				setSelectedTopic(null);
-			}
-		},
-		[selectedTopic],
-	);
+	const onComboSearchChange = useCallback((value: string) => {
+		setComboOpen(true);
+		setKeywordSearch(value);
+	}, []);
 
 	const toggleComboFromZone = useCallback(() => {
 		setComboOpen((open) => {
-			const next = !open;
-			if (next) {
-				setTopicSearch(selectedTopic ?? '');
-			}
-			return next;
+			return !open;
 		});
-	}, [selectedTopic]);
+	}, []);
 
 	const closeCombo = useCallback(() => {
 		setComboOpen(false);
@@ -159,21 +139,56 @@ export default function IndexScreen() {
 			<Text style={styles.title}>Illustrations</Text>
 
 			<TopicComboBox
-				value={comboOpen ? topicSearch : (selectedTopic ?? '')}
+				value={keywordSearch}
 				onChangeText={onComboSearchChange}
-				placeholder="Select Topic"
+				placeholder="Search topic, illustration, or application"
 				isOpen={comboOpen}
 				onToggle={toggleCombo}
 				onRequestClose={closeCombo}
 				onToggleFromZone={toggleComboFromZone}
 				options={filteredTopics}
 				onSelectOption={selectTopic}
-				showClear={Boolean(selectedTopic || topicSearch)}
+				showClear={Boolean(keywordSearch)}
 				onClear={clearSelection}
-				showOpenZone={!selectedTopic && !topicSearch.trim()}
-				emptyMessage="No matching topics."
+				showOpenZone={!keywordSearch.trim()}
+				emptyMessage="No matching topics for this filter."
 				containerStyle={styles.comboContainer}
 			/>
+
+			<View style={styles.filtersRow}>
+				<Pressable
+					style={[
+						styles.filterChip,
+						sortMode === 'newest' && styles.filterChipActive,
+					]}
+					onPress={() => setSortMode('newest')}
+				>
+					<Text
+						style={[
+							styles.filterChipText,
+							sortMode === 'newest' && styles.filterChipTextActive,
+						]}
+					>
+						Newest
+					</Text>
+				</Pressable>
+				<Pressable
+					style={[
+						styles.filterChip,
+						sortMode === 'az' && styles.filterChipActive,
+					]}
+					onPress={() => setSortMode('az')}
+				>
+					<Text
+						style={[
+							styles.filterChipText,
+							sortMode === 'az' && styles.filterChipTextActive,
+						]}
+					>
+						A-Z
+					</Text>
+				</Pressable>
+			</View>
 
 			<View style={styles.quickActionsRow}>
 				<Pressable
@@ -247,6 +262,31 @@ const styles = StyleSheet.create({
 	comboContainer: {
 		marginBottom: 12,
 		zIndex: 20,
+	},
+	filtersRow: {
+		flexDirection: 'row',
+		gap: 8,
+		marginBottom: 12,
+	},
+	filterChip: {
+		paddingVertical: 7,
+		paddingHorizontal: 12,
+		borderRadius: 16,
+		borderWidth: 1,
+		borderColor: '#cbd5e1',
+		backgroundColor: '#ffffff',
+	},
+	filterChipActive: {
+		borderColor: '#0f766e',
+		backgroundColor: '#ccfbf1',
+	},
+	filterChipText: {
+		fontSize: 13,
+		fontWeight: '600',
+		color: '#334155',
+	},
+	filterChipTextActive: {
+		color: '#115e59',
 	},
 	quickActionsRow: {
 		flexDirection: 'row',
