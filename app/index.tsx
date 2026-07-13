@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
 	FlatList,
@@ -60,14 +60,18 @@ export default function IndexScreen() {
 	}, [keywordSearch, sortMode]);
 
 	// SECTION 3: Refresh behavior
-	// Re-runs load whenever this screen gets focus (for example, after returning
-	// from Create/Edit/Delete).
+	// Phase 2.7 Step 3: Reset to a predictable default filter state on Home focus.
 	useFocusEffect(
 		useCallback(() => {
-			// Re-query data whenever this route becomes active.
-			void load();
-		}, [load]),
+			setKeywordSearch('');
+			setSortMode('az');
+			setComboOpen(false);
+		}, []),
 	);
+
+	useEffect(() => {
+		void load();
+	}, [load]);
 
 	// SECTION 4: Derived topic options + visible card list
 	// Phase 2.4 Step 1: Build sorted topic options for combo-box search/select.
@@ -105,7 +109,9 @@ export default function IndexScreen() {
 	}, []);
 
 	const clearSelection = useCallback(() => {
+		// Phase 2.7 Step 3: One-tap reset for search + sort defaults.
 		setKeywordSearch('');
+		setSortMode('az');
 		setComboOpen(false);
 	}, []);
 
