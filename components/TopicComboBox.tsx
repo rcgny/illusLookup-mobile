@@ -59,11 +59,8 @@ export function TopicComboBox({
 }: TopicComboBoxProps) {
 	const comboInputRef = useRef<TextInput | null>(null);
 
-	useEffect(() => {
-		if (isOpen) {
-			comboInputRef.current?.focus();
-		}
-	}, [isOpen]);
+	// Phase 2.7 Step 6: Do not auto-focus on open to avoid Android soft-keyboard popups.
+	// Users can still tap into the input directly when they want to type.
 
 	useEffect(() => {
 		if (!isOpen) return;

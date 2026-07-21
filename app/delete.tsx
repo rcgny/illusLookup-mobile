@@ -64,21 +64,42 @@ export default function DeleteScreen() {
 			? null
 			: (items.find((item) => item.id === selectedId) ?? null);
 
-	const sortedTopics = useMemo(() => {
-		const unique = Array.from(new Set(items.map((i) => i.topic.trim()))).filter(
-			(topic) => topic.length > 0,
-		);
+	// Phase 2.7 Step 5: Use id-qualified labels so records with shared topics remain selectable.
+	const toOptionLabel = useCallback((item: Illustration) => {
+		return `${item.topic} (ID ${item.id})`;
+	}, []);
 
-		return unique.sort((a, b) =>
-			a.localeCompare(b, undefined, { sensitivity: 'base' }),
-		);
+	const sortedItems = useMemo(() => {
+		return [...items].sort((a, b) => {
+			const topicOrder = a.topic.localeCompare(b.topic, undefined, {
+				sensitivity: 'base',
+			});
+			if (topicOrder !== 0) return topicOrder;
+			return a.id - b.id;
+		});
 	}, [items]);
 
-	const filteredTopics = useMemo(() => {
+	const filteredItems = useMemo(() => {
 		const q = topicSearch.trim().toLowerCase();
-		if (!q) return sortedTopics;
-		return sortedTopics.filter((topic) => topic.toLowerCase().includes(q));
-	}, [sortedTopics, topicSearch]);
+		if (!q) return sortedItems;
+		return sortedItems.filter((item) => {
+			return (
+				item.topic.toLowerCase().includes(q) ||
+				item.illus.toLowerCase().includes(q) ||
+				item.application.toLowerCase().includes(q) ||
+				String(item.id).includes(q)
+			);
+		});
+	}, [sortedItems, topicSearch]);
+
+	const filteredOptions = useMemo(() => {
+		return filteredItems.map(toOptionLabel);
+	}, [filteredItems, toOptionLabel]);
+
+	const selectedOptionLabel = useMemo(() => {
+		if (!selectedItem) return '';
+		return toOptionLabel(selectedItem);
+	}, [selectedItem, toOptionLabel]);
 
 	// SECTION 2: Load items when screen becomes active
 	const load = useCallback(async () => {
@@ -105,7 +126,7 @@ export default function DeleteScreen() {
 
 				if (routeMatch) {
 					setSelectedId(routeMatch.id);
-					setTopicSearch(routeMatch.topic);
+					setTopicSearch(toOptionLabel(routeMatch));
 					setComboOpen(false);
 					setRoutePrefillApplied(true);
 					return;
@@ -120,7 +141,7 @@ export default function DeleteScreen() {
 
 			if (stillExists) {
 				const existing = data.find((item) => item.id === selectedId);
-				setTopicSearch(existing?.topic ?? '');
+				setTopicSearch(existing ? toOptionLabel(existing) : '');
 			} else {
 				setTopicSearch('');
 			}
@@ -129,7 +150,7 @@ export default function DeleteScreen() {
 		} finally {
 			setLoadingList(false);
 		}
-	}, [routeDeleteId, routePrefillApplied, selectedId]);
+	}, [routeDeleteId, routePrefillApplied, selectedId, toOptionLabel]);
 
 	useFocusEffect(
 		useCallback(() => {
@@ -137,9 +158,9 @@ export default function DeleteScreen() {
 		}, [load]),
 	);
 
-	const handleSelect = (id: number, topic: string) => {
+	const handleSelect = (id: number, optionLabel: string) => {
 		setSelectedId(id);
-		setTopicSearch(topic);
+		setTopicSearch(optionLabel);
 		setComboOpen(false);
 		setErrorMessage(null);
 		setSuccessMessage(null);
@@ -149,21 +170,21 @@ export default function DeleteScreen() {
 		setComboOpen((open) => {
 			const next = !open;
 			if (next) {
-				setTopicSearch(selectedItem?.topic ?? '');
+				setTopicSearch(selectedItem ? toOptionLabel(selectedItem) : '');
 			}
 			return next;
 		});
-	}, [selectedItem]);
+	}, [selectedItem, toOptionLabel]);
 
 	const toggleComboFromZone = useCallback(() => {
 		setComboOpen((open) => {
 			const next = !open;
 			if (next) {
-				setTopicSearch(selectedItem?.topic ?? '');
+				setTopicSearch(selectedItem ? toOptionLabel(selectedItem) : '');
 			}
 			return next;
 		});
-	}, [selectedItem]);
+	}, [selectedItem, toOptionLabel]);
 
 	const closeCombo = useCallback(() => {
 		setComboOpen(false);
@@ -174,11 +195,11 @@ export default function DeleteScreen() {
 			setComboOpen(true);
 			setTopicSearch(value);
 
-			if (selectedItem && value.trim() !== selectedItem.topic) {
+			if (selectedItem && value.trim() !== selectedOptionLabel) {
 				setSelectedId(null);
 			}
 		},
-		[selectedItem],
+		[selectedItem, selectedOptionLabel],
 	);
 
 	const clearSelection = useCallback(() => {
@@ -259,18 +280,20 @@ export default function DeleteScreen() {
 
 			{!loadingList && items.length > 0 && (
 				<TopicComboBox
-					value={comboOpen ? topicSearch : (selectedItem?.topic ?? '')}
+					value={comboOpen ? topicSearch : selectedOptionLabel}
 					onChangeText={onComboSearchChange}
-					placeholder="Select Topic"
+					placeholder="Select Illustration"
 					isOpen={comboOpen}
 					onToggle={toggleCombo}
 					onRequestClose={closeCombo}
 					onToggleFromZone={toggleComboFromZone}
-					options={filteredTopics}
-					onSelectOption={(topic) => {
-						const match = items.find((row) => row.topic === topic);
+					options={filteredOptions}
+					onSelectOption={(optionLabel) => {
+						const match = filteredItems.find(
+							(row) => toOptionLabel(row) === optionLabel,
+						);
 						if (!match) return;
-						handleSelect(match.id, match.topic);
+						handleSelect(match.id, optionLabel);
 					}}
 					showClear={Boolean(selectedItem || topicSearch)}
 					onClear={clearSelection}

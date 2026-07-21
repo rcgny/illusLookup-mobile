@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
 	FlatList,
+	Keyboard,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -32,11 +33,13 @@ export default function IndexScreen() {
 	// State values track fetched data, UI status, and topic combo-box input.
 	const router = useRouter();
 	const [items, setItems] = useState<Illustration[]>([]);
+	const [keywordInput, setKeywordInput] = useState('');
 	const [keywordSearch, setKeywordSearch] = useState('');
 	const [sortMode, setSortMode] = useState<'newest' | 'az'>('az');
 	const [comboOpen, setComboOpen] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const SEARCH_IDLE_MS = 700;
 
 	// SECTION 2: Data loading
 	// This function is the single source of truth for loading list data.
@@ -60,21 +63,31 @@ export default function IndexScreen() {
 	}, [keywordSearch, sortMode]);
 
 	// SECTION 3: Refresh behavior
-	// Phase 2.7 Step 3: Reset to a predictable default filter state on Home focus.
+	// Phase 2.7 Step 4: Refresh rows on focus without resetting active filters.
 	useFocusEffect(
 		useCallback(() => {
-			setKeywordSearch('');
-			setSortMode('az');
 			setComboOpen(false);
 
-			// Phase 2.7 Step 4: Always refresh Home data on focus, even when defaults are unchanged.
+			// Keeps Home fresh after CRUD navigation while preserving user-selected filters.
 			void load();
 		}, [load]),
 	);
 
 	useEffect(() => {
-		void load();
-	}, [load]);
+		// Phase 2.7 Step 7: Debounce text search and dismiss keyboard after typing pause.
+		const timer = setTimeout(() => {
+			setKeywordSearch(keywordInput);
+
+			if (keywordInput.trim().length > 0) {
+				setComboOpen(false);
+				Keyboard.dismiss();
+			}
+		}, SEARCH_IDLE_MS);
+
+		return () => {
+			clearTimeout(timer);
+		};
+	}, [keywordInput]);
 
 	// SECTION 4: Derived topic options + visible card list
 	// Phase 2.4 Step 1: Build sorted topic options for combo-box search/select.
@@ -107,20 +120,24 @@ export default function IndexScreen() {
 	}, []);
 
 	const selectTopic = useCallback((topic: string) => {
+		setKeywordInput(topic);
 		setKeywordSearch(topic);
 		setComboOpen(false);
+		Keyboard.dismiss();
 	}, []);
 
 	const clearSelection = useCallback(() => {
 		// Phase 2.7 Step 3: One-tap reset for search + sort defaults.
+		setKeywordInput('');
 		setKeywordSearch('');
 		setSortMode('az');
 		setComboOpen(false);
+		Keyboard.dismiss();
 	}, []);
 
 	const onComboSearchChange = useCallback((value: string) => {
 		setComboOpen(true);
-		setKeywordSearch(value);
+		setKeywordInput(value);
 	}, []);
 
 	const toggleComboFromZone = useCallback(() => {
@@ -148,7 +165,7 @@ export default function IndexScreen() {
 			<Text style={styles.title}>Illustrations</Text>
 
 			<TopicComboBox
-				value={keywordSearch}
+				value={keywordInput}
 				onChangeText={onComboSearchChange}
 				placeholder="Search topic, illustration, or application"
 				isOpen={comboOpen}
@@ -157,12 +174,15 @@ export default function IndexScreen() {
 				onToggleFromZone={toggleComboFromZone}
 				options={filteredTopics}
 				onSelectOption={selectTopic}
-				showClear={Boolean(keywordSearch)}
+				showClear={Boolean(keywordInput)}
 				onClear={clearSelection}
-				showOpenZone={!keywordSearch.trim()}
+				showOpenZone={!keywordInput.trim()}
 				emptyMessage="No matching topics for this filter."
 				containerStyle={styles.comboContainer}
 			/>
+			<Text
+				style={styles.countLabel}
+			>{`Illustrations: ${visibleItems.length}`}</Text>
 
 			<View style={styles.filtersRow}>
 				<Pressable
@@ -349,6 +369,12 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		color: '#0f766e',
 		marginTop: 2,
+	},
+	countLabel: {
+		fontSize: 14,
+		fontWeight: '600',
+		color: '#4b5563',
+		marginBottom: 10,
 	},
 	empty: {
 		marginTop: 24,
