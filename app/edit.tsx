@@ -8,6 +8,7 @@ import { useCallback, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
 	Pressable,
+	ScrollView,
 	StyleSheet,
 	Text,
 	TextInput,
@@ -315,124 +316,134 @@ export default function EditScreen() {
 	};
 
 	return (
-		<View style={styles.screen}>
-			<Text style={styles.title}>Edit Illustration</Text>
-			<Text style={styles.subtitle}>
-				Select an existing item, update fields, then save changes.
-			</Text>
-
-			<Text style={styles.sectionTitle}>Choose Illustration</Text>
-			{loadingList && <ActivityIndicator size="small" style={styles.loader} />}
-			{!loadingList && items.length === 0 && (
-				<Text style={styles.empty}>No illustrations available to edit.</Text>
-			)}
-
-			{!loadingList && items.length > 0 && (
-				<TopicComboBox
-					value={comboOpen ? topicSearch : selectedOptionLabel}
-					onChangeText={onComboSearchChange}
-					placeholder="Select Illustration"
-					isOpen={comboOpen}
-					onToggle={toggleCombo}
-					onRequestClose={closeCombo}
-					onToggleFromZone={toggleComboFromZone}
-					options={filteredOptions}
-					onSelectOption={(optionLabel) => {
-						const match = filteredItems.find(
-							(row) => toOptionLabel(row) === optionLabel,
-						);
-						if (!match) return;
-						selectItem(match);
-					}}
-					showClear={Boolean(selectedItem || topicSearch)}
-					onClear={clearSelection}
-					showOpenZone={!selectedItem && !topicSearch.trim()}
-					emptyMessage="No matching topics."
-					containerStyle={styles.comboContainer}
-				/>
-			)}
-
-			<Text style={styles.sectionTitle}>Edit Fields</Text>
-
-			{selectedItem ? (
-				<>
-					<Text style={styles.label}>Topic</Text>
-					<TextInput
-						value={form.topic}
-						onChangeText={(value) => updateField('topic', value)}
-						placeholder="Enter topic"
-						style={styles.input}
-					/>
-					{fieldErrors.topic && (
-						<Text style={styles.validation}>{fieldErrors.topic}</Text>
-					)}
-
-					<Text style={styles.label}>Illustration</Text>
-					<TextInput
-						value={form.illus}
-						onChangeText={(value) => updateField('illus', value)}
-						placeholder="Enter illustration"
-						style={[styles.input, styles.multiLine]}
-						multiline
-						textAlignVertical="top"
-					/>
-					{fieldErrors.illus && (
-						<Text style={styles.validation}>{fieldErrors.illus}</Text>
-					)}
-
-					<Text style={styles.label}>Application</Text>
-					<TextInput
-						value={form.application}
-						onChangeText={(value) => updateField('application', value)}
-						placeholder="Enter application"
-						style={[styles.input, styles.multiLine]}
-						multiline
-						textAlignVertical="top"
-					/>
-					{fieldErrors.application && (
-						<Text style={styles.validation}>{fieldErrors.application}</Text>
-					)}
-
-					<Text style={styles.label}>Source</Text>
-					<TextInput
-						value={form.sourceLink}
-						onChangeText={(value) => updateField('sourceLink', value)}
-						placeholder="Enter source"
-						style={styles.input}
-					/>
-					{fieldErrors.sourceLink && (
-						<Text style={styles.validation}>{fieldErrors.sourceLink}</Text>
-					)}
-				</>
-			) : (
-				<Text style={styles.empty}>
-					Select an item from the dropdown to edit.
+		<ScrollView
+			contentContainerStyle={styles.scrollContent}
+			keyboardShouldPersistTaps="handled"
+		>
+			<View style={styles.screen}>
+				<Text style={styles.title}>Edit Illustration</Text>
+				<Text style={styles.subtitle}>
+					Select an existing item, update fields, then save changes.
 				</Text>
-			)}
 
-			{errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
-			{successMessage && <Text style={styles.success}>{successMessage}</Text>}
-
-			<Pressable
-				style={[
-					styles.saveButton,
-					(saving || !selectedItem || !isFormValid || !isDirty) &&
-						styles.saveButtonDisabled,
-				]}
-				onPress={handleSavePress}
-				disabled={saving || !selectedItem || !isFormValid || !isDirty}
-			>
-				{saving ? (
-					<ActivityIndicator color="#ffffff" />
-				) : (
-					<Text style={styles.saveButtonText}>Save Changes</Text>
+				<Text style={styles.sectionTitle}>Choose Illustration</Text>
+				{loadingList && (
+					<ActivityIndicator size="small" style={styles.loader} />
 				)}
-			</Pressable>
-		</View>
+				{!loadingList && items.length === 0 && (
+					<Text style={styles.empty}>No illustrations available to edit.</Text>
+				)}
+
+				{!loadingList && items.length > 0 && (
+					<TopicComboBox
+						value={comboOpen ? topicSearch : selectedOptionLabel}
+						onChangeText={onComboSearchChange}
+						placeholder="Select Illustration"
+						isOpen={comboOpen}
+						onToggle={toggleCombo}
+						onRequestClose={closeCombo}
+						onToggleFromZone={toggleComboFromZone}
+						options={filteredOptions}
+						onSelectOption={(optionLabel) => {
+							const match = filteredItems.find(
+								(row) => toOptionLabel(row) === optionLabel,
+							);
+							if (!match) return;
+							selectItem(match);
+						}}
+						showClear={Boolean(selectedItem || topicSearch)}
+						onClear={clearSelection}
+						showOpenZone={!selectedItem && !topicSearch.trim()}
+						emptyMessage="No matching topics."
+						containerStyle={styles.comboContainer}
+					/>
+				)}
+
+				<Text style={styles.sectionTitle}>Edit Fields</Text>
+
+				{selectedItem ? (
+					<>
+						<Text style={styles.label}>Topic</Text>
+						<TextInput
+							value={form.topic}
+							onChangeText={(value) => updateField('topic', value)}
+							placeholder="Enter topic"
+							style={styles.input}
+						/>
+						{fieldErrors.topic && (
+							<Text style={styles.validation}>{fieldErrors.topic}</Text>
+						)}
+
+						<Text style={styles.label}>Illustration</Text>
+						<TextInput
+							value={form.illus}
+							onChangeText={(value) => updateField('illus', value)}
+							placeholder="Enter illustration"
+							style={[styles.input, styles.multiLine]}
+							multiline
+							textAlignVertical="top"
+						/>
+						{fieldErrors.illus && (
+							<Text style={styles.validation}>{fieldErrors.illus}</Text>
+						)}
+
+						<Text style={styles.label}>Application</Text>
+						<TextInput
+							value={form.application}
+							onChangeText={(value) => updateField('application', value)}
+							placeholder="Enter application"
+							style={[styles.input, styles.multiLine]}
+							multiline
+							textAlignVertical="top"
+						/>
+						{fieldErrors.application && (
+							<Text style={styles.validation}>{fieldErrors.application}</Text>
+						)}
+
+						<Text style={styles.label}>Source</Text>
+						<TextInput
+							value={form.sourceLink}
+							onChangeText={(value) => updateField('sourceLink', value)}
+							placeholder="Enter source"
+							style={styles.input}
+						/>
+						{fieldErrors.sourceLink && (
+							<Text style={styles.validation}>{fieldErrors.sourceLink}</Text>
+						)}
+					</>
+				) : (
+					<Text style={styles.empty}>
+						Select an item from the dropdown to edit.
+					</Text>
+				)}
+
+				{errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
+				{successMessage && <Text style={styles.success}>{successMessage}</Text>}
+
+				<Pressable
+					style={[
+						styles.saveButton,
+						(saving || !selectedItem || !isFormValid || !isDirty) &&
+							styles.saveButtonDisabled,
+					]}
+					onPress={handleSavePress}
+					disabled={saving || !selectedItem || !isFormValid || !isDirty}
+				>
+					{saving ? (
+						<ActivityIndicator color="#ffffff" />
+					) : (
+						<Text style={styles.saveButtonText}>Save Changes</Text>
+					)}
+				</Pressable>
+			</View>
+		</ScrollView>
 	);
 }
 
 const styles = StyleSheet.create({
+	scrollContent: {
+		flexGrow: 1,
+	},
 	screen: {
 		flex: 1,
 		paddingHorizontal: 16,
