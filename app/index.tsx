@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
+	Alert,
 	FlatList,
 	Keyboard,
 	Pressable,
@@ -10,6 +11,10 @@ import {
 	View,
 } from 'react-native';
 import { TopicComboBox } from '../components/TopicComboBox';
+import {
+	exportSQLiteDatabaseBackup,
+	exportSQLiteJsonDump,
+} from '../services/databaseExport';
 import { listIllustrations } from '../services/illustrationsRepo';
 import { Illustration } from '../types/illustration';
 
@@ -39,6 +44,9 @@ export default function IndexScreen() {
 	const [comboOpen, setComboOpen] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [exporting, setExporting] = useState<'db' | 'json' | null>(null);
+	const [exportMessage, setExportMessage] = useState<string | null>(null);
+	const [exportError, setExportError] = useState<string | null>(null);
 	const SEARCH_IDLE_MS = 700;
 
 	// SECTION 2: Data loading
@@ -150,6 +158,61 @@ export default function IndexScreen() {
 		setComboOpen(false);
 	}, []);
 
+	const runExport = useCallback(async (kind: 'db' | 'json') => {
+		try {
+			setExporting(kind);
+			setExportError(null);
+			setExportMessage(null);
+
+			// Phase 2.9 Step 1: Generate either a shareable SQLite backup or JSON dump from the device-local DB.
+			const result =
+				kind === 'db'
+					? await exportSQLiteDatabaseBackup()
+					: await exportSQLiteJsonDump();
+
+			const message = result.shared
+				? `${result.fileName} was saved and the share sheet opened.`
+				: `${result.fileName} was saved in the app documents export folder.`;
+
+			setExportMessage(message);
+			Alert.alert('Export Complete', message);
+		} catch (exportIssue) {
+			const message =
+				exportIssue instanceof Error
+					? exportIssue.message
+					: 'Failed to export Illus Mobile data.';
+			setExportError(message);
+			Alert.alert('Export Failed', message);
+		} finally {
+			setExporting(null);
+		}
+	}, []);
+
+	const openExportChooser = useCallback(() => {
+		if (exporting) {
+			return;
+		}
+
+		Alert.alert('Export Illus Mobile Data', 'Choose an export format.', [
+			{
+				text: 'SQLite DB',
+				onPress: () => {
+					void runExport('db');
+				},
+			},
+			{
+				text: 'JSON Dump',
+				onPress: () => {
+					void runExport('json');
+				},
+			},
+			{
+				text: 'Cancel',
+				style: 'cancel',
+			},
+		]);
+	}, [exporting, runExport]);
+
 	// Phase 2.6.1 Step 2: Open fullscreen read-only illustration card.
 	const openReadOnlyCard = useCallback(
 		(id: number) => {
@@ -239,6 +302,24 @@ export default function IndexScreen() {
 					<Text style={styles.actionText}>Delete</Text>
 				</Pressable>
 			</View>
+
+			<Pressable
+				style={[styles.exportButton, exporting && styles.exportButtonDisabled]}
+				onPress={openExportChooser}
+				disabled={Boolean(exporting)}
+			>
+				<Text style={styles.exportButtonText}>
+					{exporting === 'db'
+						? 'Exporting DB...'
+						: exporting === 'json'
+							? 'Exporting JSON...'
+							: 'Export Data'}
+				</Text>
+			</Pressable>
+			{exportMessage && (
+				<Text style={styles.exportSuccess}>{exportMessage}</Text>
+			)}
+			{exportError && <Text style={styles.exportError}>{exportError}</Text>}
 
 			{loading && <ActivityIndicator size="large" style={styles.loader} />}
 			{!loading && error && <Text style={styles.error}>{error}</Text>}
@@ -331,6 +412,31 @@ const styles = StyleSheet.create({
 	actionText: {
 		color: '#ffffff',
 		fontWeight: '600',
+	},
+	exportButton: {
+		marginBottom: 12,
+		backgroundColor: '#1d4ed8',
+		borderRadius: 10,
+		paddingVertical: 10,
+		paddingHorizontal: 12,
+		alignItems: 'center',
+	},
+	exportButtonDisabled: {
+		opacity: 0.55,
+	},
+	exportButtonText: {
+		color: '#ffffff',
+		fontWeight: '700',
+	},
+	exportSuccess: {
+		marginBottom: 10,
+		fontSize: 13,
+		color: '#0f766e',
+	},
+	exportError: {
+		marginBottom: 10,
+		fontSize: 13,
+		color: '#b91c1c',
 	},
 	loader: {
 		marginTop: 24,

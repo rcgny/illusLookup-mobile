@@ -9,7 +9,7 @@ import * as SQLite from 'expo-sqlite';
  * - Initializes schema and starter rows exactly once.
  */
 
-const DB_NAME = 'illuslookup.db';
+export const DB_NAME = 'illuslookup.db';
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 let initializationPromise: Promise<void> | null = null;
 

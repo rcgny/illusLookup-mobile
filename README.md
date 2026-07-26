@@ -11,6 +11,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 - Phase 2.5: Standardized combo-box interaction behavior and extracted a shared TopicComboBox component.
 - Phase 2.6: Added read-only detail route, simplified save behavior in create/edit, and connected detail -> edit/delete route prefill.
 - Phase 2.7: Added unified search/sort filtering, stable selection for duplicate topics, keyboard behavior updates, and focus-refresh behavior.
+- Phase 2.9 Step 1: Added on-device export actions for a shareable SQLite backup file and a JSON dump.
 
 ### Phase 2 Detailed Steps (2.4 to 2.7)
 
@@ -48,6 +49,11 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 5. Edit/Delete: Switched option labels to include id so duplicate-topic rows remain uniquely selectable.
 6. TopicComboBox: Removed auto-focus on open to prevent Android soft keyboard popups.
 7. Home: Added debounced search commit and keyboard dismiss on typing pause.
+
+#### Phase 2.9 Steps
+
+1. Phase 2.9 Step 1: Added Home-screen export actions for a SQLite `.db` backup and a JSON dump.
+2. Phase 2.9 Step 1: Save export files in the app documents area and open the system share sheet when available.
 
 ## Phase 2.8 Samsung Phone Setup
 
@@ -119,6 +125,20 @@ Expected result: Detail, edit, and delete all work normally on Samsung.
 2. Home screen loads cleanly.
 3. Create/edit/delete flows work on-device.
 4. Created SQLite data survives app relaunch.
+
+## Phase 2.9 Data Export
+
+Phase 2.9 Step 1 adds an export feature for device-local SQLite data. Use the `Export Data` button on the home screen to generate one of these outputs:
+
+1. SQLite DB backup: Creates a shareable `.db` file snapshot of the current local database.
+2. JSON dump: Creates a readable JSON export of the current database rows and app metadata.
+
+Notes:
+
+1. These exports are created on the phone from the phone-local database.
+2. The raw private app data folder is still not directly browsable on a normal non-rooted Android phone.
+3. The exported `.db` file is the format intended for later import into Illus Mobile on another device.
+4. Phase 2.9 Step 2 will add the import flow.
 
 ### Key Files
 
