@@ -12,6 +12,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 - Phase 2.6: Added read-only detail route, simplified save behavior in create/edit, and connected detail -> edit/delete route prefill.
 - Phase 2.7: Added unified search/sort filtering, stable selection for duplicate topics, keyboard behavior updates, and focus-refresh behavior.
 - Phase 2.9 Step 1: Added on-device export actions for a shareable SQLite backup file and a JSON dump.
+- Phase 2.9 Step 2: Added on-device SQLite `.db` import to restore shared backups.
 
 ### Phase 2 Detailed Steps (2.4 to 2.7)
 
@@ -54,6 +55,9 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
 1. Phase 2.9 Step 1: Added Home-screen export actions for a SQLite `.db` backup and a JSON dump.
 2. Phase 2.9 Step 1: Save export files in the app documents area and open the system share sheet when available.
+3. Phase 2.9 Step 2: Added Home-screen import action that restores data from a selected SQLite `.db` backup.
+4. Phase 2.9 Step 2: Import flow validates expected tables, replaces local DB contents, and refreshes Home rows.
+5. Phase 2.9 Step 2: Added pre-import snapshot + automatic rollback so failed imports restore previous local data.
 
 ## Phase 2.8 Samsung Phone Setup
 
@@ -126,7 +130,7 @@ Expected result: Detail, edit, and delete all work normally on Samsung.
 3. Create/edit/delete flows work on-device.
 4. Created SQLite data survives app relaunch.
 
-## Phase 2.9 Data Export
+## Phase 2.9 Data Export and Import
 
 Phase 2.9 Step 1 adds an export feature for device-local SQLite data. Use the `Export Data` button on the home screen to generate one of these outputs:
 
@@ -138,7 +142,77 @@ Notes:
 1. These exports are created on the phone from the phone-local database.
 2. The raw private app data folder is still not directly browsable on a normal non-rooted Android phone.
 3. The exported `.db` file is the format intended for later import into Illus Mobile on another device.
-4. Phase 2.9 Step 2 will add the import flow.
+4. Phase 2.9 Step 2 import is available from the `Import Data` button on the home screen.
+
+### Phase 2.9 Import Notes
+
+1. Import uses a selected `.db` backup file and replaces local data on the current device.
+2. Import is intended for moving data between phones running Illus Mobile.
+3. Keep a current export backup before running import, since import overwrites local DB state.
+4. If import fails after starting, the app attempts automatic rollback to the pre-import local DB snapshot.
+
+### Phase 2.9 Import QA Checklist
+
+Use this checklist to validate both the happy path and failure safety path on Android devices.
+
+#### A) Successful Import Test
+
+1. On source phone, create a known test dataset (for example, exactly 3 topics).
+2. Export a SQLite backup from `Export Data` -> `SQLite DB`.
+3. Transfer the backup file to target phone (Downloads is recommended).
+4. On target phone, note the current row count before import.
+5. Run `Import Data` and select the transferred backup file.
+6. Confirm success message appears and imported row count matches expectation.
+7. Verify list data on Home reflects the source dataset.
+
+Pass criteria:
+
+1. Import completes without crash.
+2. Imported row count is correct.
+3. Expected topics/illustrations are visible on Home.
+
+#### B) Intentionally Bad-File Import Test
+
+1. Create a fake invalid file (for example, a plain text file renamed to `.db`).
+2. Ensure you know current good row count before test.
+3. Run `Import Data` and select the invalid file.
+4. Confirm import fails with an error message.
+5. Verify Home data and row count remain unchanged.
+
+Pass criteria:
+
+1. Import fails gracefully (no app crash).
+2. Existing local data is preserved after failed import.
+3. You can continue normal app usage immediately.
+
+#### C) Multi-Device Confidence Sweep
+
+1. Repeat A and B on at least 2 to 3 Android devices when possible.
+2. Include at least one test where import file is selected via Android Downloads provider (`content://` URI path).
+
+### Phase 2.9 Known Import Errors and Meaning
+
+Support info to collect for bug reports: device model, Android version, exact first error line, and whether file was chosen from Downloads (`content://`) or local file path.
+
+1. `The selected file is not a valid Illus Mobile backup.`
+   - Meaning: the chosen file is not a compatible SQLite backup for this app schema.
+   - Action: select a `.db` file exported by Illus Mobile `Export Data`.
+
+2. `Import rollback could not be confirmed; please restore from your latest exported backup.`
+   - Meaning: import failed and automatic rollback could not be guaranteed.
+   - Action: import your most recent known-good backup file.
+
+3. `URI is not absolute`
+   - Meaning: file path handling failed for the selected provider URI.
+   - Action: retry from Android Downloads and confirm latest app code is running.
+
+4. `Call to function 'FileSystemFile.copy' ... cannot be used with content URIs`
+   - Meaning: runtime rejected direct copy from a `content://` source.
+   - Action: use the current bytes-based import flow (already implemented in this project).
+
+5. `Received 3 arguments, but 2 was expected`
+   - Meaning: runtime method signature mismatch with a previous API call shape.
+   - Action: ensure latest import code is deployed; this project uses compatible call forms.
 
 ### Key Files
 

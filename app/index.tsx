@@ -14,6 +14,7 @@ import { TopicComboBox } from '../components/TopicComboBox';
 import {
 	exportSQLiteDatabaseBackup,
 	exportSQLiteJsonDump,
+	importSQLiteDatabaseBackup,
 } from '../services/databaseExport';
 import { listIllustrations } from '../services/illustrationsRepo';
 import { Illustration } from '../types/illustration';
@@ -45,8 +46,10 @@ export default function IndexScreen() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [exporting, setExporting] = useState<'db' | 'json' | null>(null);
-	const [exportMessage, setExportMessage] = useState<string | null>(null);
+	const [importing, setImporting] = useState(false);
 	const [exportError, setExportError] = useState<string | null>(null);
+	const [importError, setImportError] = useState<string | null>(null);
+	const [shareMenuOpen, setShareMenuOpen] = useState(false);
 	const SEARCH_IDLE_MS = 700;
 
 	// SECTION 2: Data loading
@@ -75,6 +78,7 @@ export default function IndexScreen() {
 	useFocusEffect(
 		useCallback(() => {
 			setComboOpen(false);
+			setShareMenuOpen(false);
 
 			// Keeps Home fresh after CRUD navigation while preserving user-selected filters.
 			void load();
@@ -162,7 +166,6 @@ export default function IndexScreen() {
 		try {
 			setExporting(kind);
 			setExportError(null);
-			setExportMessage(null);
 
 			// Phase 2.9 Step 1: Generate either a shareable SQLite backup or JSON dump from the device-local DB.
 			const result =
@@ -174,7 +177,6 @@ export default function IndexScreen() {
 				? `${result.fileName} was saved and the share sheet opened.`
 				: `${result.fileName} was saved in the app documents export folder.`;
 
-			setExportMessage(message);
 			Alert.alert('Export Complete', message);
 		} catch (exportIssue) {
 			const message =
@@ -189,7 +191,7 @@ export default function IndexScreen() {
 	}, []);
 
 	const openExportChooser = useCallback(() => {
-		if (exporting) {
+		if (exporting || importing) {
 			return;
 		}
 
@@ -211,7 +213,83 @@ export default function IndexScreen() {
 				style: 'cancel',
 			},
 		]);
-	}, [exporting, runExport]);
+	}, [exporting, importing, runExport]);
+
+	const runImport = useCallback(async () => {
+		try {
+			setImporting(true);
+			setImportError(null);
+
+			// Phase 2.9 Step 2: Pick a `.db` backup and restore device-local SQLite data from it.
+			const result = await importSQLiteDatabaseBackup();
+			if (!result) {
+				return;
+			}
+
+			const message = `Imported ${result.fileName}. Illustrations now: ${result.importedRows}.`;
+			Alert.alert('Import Complete', message);
+
+			// Refresh Home list immediately so imported rows appear without navigation.
+			await load();
+		} catch (importIssue) {
+			const message =
+				importIssue instanceof Error
+					? importIssue.message
+					: 'Failed to import SQLite backup.';
+			setImportError(message);
+			Alert.alert('Import Failed', message);
+		} finally {
+			setImporting(false);
+		}
+	}, [load]);
+
+	const openImportConfirmation = useCallback(() => {
+		if (importing || exporting) {
+			return;
+		}
+
+		Alert.alert(
+			'Import SQLite Backup',
+			'Choose a .db backup file. Import will replace current local data on this device.',
+			[
+				{
+					text: 'Cancel',
+					style: 'cancel',
+				},
+				{
+					text: 'Import',
+					onPress: () => {
+						void runImport();
+					},
+				},
+			],
+		);
+	}, [exporting, importing, runImport]);
+
+	const toggleShareDataMenu = useCallback(() => {
+		if (importing || exporting) {
+			return;
+		}
+
+		// Phase 2.9 Step 3: compact in-screen menu opens/closes from the Share data button.
+		setShareMenuOpen((open) => !open);
+	}, [exporting, importing]);
+
+	const closeShareDataMenu = useCallback(() => {
+		setShareMenuOpen(false);
+	}, []);
+
+	const onShareImportPress = useCallback(() => {
+		// Phase 2.9 Step 3: close menu first so outside tap behavior stays consistent.
+		setShareMenuOpen(false);
+		openImportConfirmation();
+	}, [openImportConfirmation]);
+
+	const onShareExportPress = useCallback(() => {
+		// Phase 2.9 Step 3: close menu first so outside tap behavior stays consistent.
+		setShareMenuOpen(false);
+		openExportChooser();
+	}, [openExportChooser]);
 
 	// Phase 2.6.1 Step 2: Open fullscreen read-only illustration card.
 	const openReadOnlyCard = useCallback(
@@ -225,6 +303,13 @@ export default function IndexScreen() {
 	// Layout order: title -> search -> action buttons -> status states -> list.
 	return (
 		<View style={styles.screen}>
+			{shareMenuOpen && (
+				<Pressable
+					style={styles.shareMenuBackdrop}
+					onPress={closeShareDataMenu}
+				/>
+			)}
+
 			<Text style={styles.title}>Illustrations</Text>
 
 			<TopicComboBox
@@ -301,25 +386,38 @@ export default function IndexScreen() {
 				>
 					<Text style={styles.actionText}>Delete</Text>
 				</Pressable>
+				<Pressable
+					style={[
+						styles.shareActionBtn,
+						(exporting || importing) && styles.shareActionBtnDisabled,
+					]}
+					onPress={toggleShareDataMenu}
+					disabled={Boolean(exporting || importing)}
+				>
+					<Text style={styles.shareActionText}>
+						{importing
+							? 'Importing...'
+							: exporting
+								? 'Exporting...'
+								: 'Share data'}
+					</Text>
+				</Pressable>
 			</View>
-
-			<Pressable
-				style={[styles.exportButton, exporting && styles.exportButtonDisabled]}
-				onPress={openExportChooser}
-				disabled={Boolean(exporting)}
-			>
-				<Text style={styles.exportButtonText}>
-					{exporting === 'db'
-						? 'Exporting DB...'
-						: exporting === 'json'
-							? 'Exporting JSON...'
-							: 'Export Data'}
-				</Text>
-			</Pressable>
-			{exportMessage && (
-				<Text style={styles.exportSuccess}>{exportMessage}</Text>
+			{shareMenuOpen && (
+				<View style={styles.shareMenuPanel}>
+					<Pressable style={styles.shareMenuItem} onPress={onShareImportPress}>
+						<Text style={styles.shareMenuItemText}>Import Data</Text>
+					</Pressable>
+					<Pressable style={styles.shareMenuItem} onPress={onShareExportPress}>
+						<Text style={styles.shareMenuItemText}>Export Data</Text>
+					</Pressable>
+					<Pressable style={styles.shareMenuItem} onPress={closeShareDataMenu}>
+						<Text style={styles.shareMenuItemText}>Cancel</Text>
+					</Pressable>
+				</View>
 			)}
 			{exportError && <Text style={styles.exportError}>{exportError}</Text>}
+			{importError && <Text style={styles.importError}>{importError}</Text>}
 
 			{loading && <ActivityIndicator size="large" style={styles.loader} />}
 			{!loading && error && <Text style={styles.error}>{error}</Text>}
@@ -362,6 +460,10 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 16,
 		paddingTop: 14,
 		backgroundColor: '#f6f7f9',
+	},
+	shareMenuBackdrop: {
+		...StyleSheet.absoluteFillObject,
+		zIndex: 25,
 	},
 	title: {
 		fontSize: 28,
@@ -413,27 +515,50 @@ const styles = StyleSheet.create({
 		color: '#ffffff',
 		fontWeight: '600',
 	},
-	exportButton: {
-		marginBottom: 12,
-		backgroundColor: '#1d4ed8',
+	shareActionBtn: {
+		backgroundColor: '#2563eb',
 		borderRadius: 10,
-		paddingVertical: 10,
+		paddingVertical: 8,
 		paddingHorizontal: 12,
-		alignItems: 'center',
 	},
-	exportButtonDisabled: {
+	shareActionBtnDisabled: {
 		opacity: 0.55,
 	},
-	exportButtonText: {
+	shareActionText: {
 		color: '#ffffff',
-		fontWeight: '700',
+		fontWeight: '600',
 	},
-	exportSuccess: {
-		marginBottom: 10,
-		fontSize: 13,
-		color: '#0f766e',
+	shareMenuPanel: {
+		zIndex: 30,
+		alignSelf: 'flex-end',
+		minWidth: 156,
+		backgroundColor: '#ffffff',
+		borderRadius: 10,
+		borderWidth: 1,
+		borderColor: '#cbd5e1',
+		marginTop: -6,
+		marginBottom: 12,
+		shadowColor: '#000000',
+		shadowOpacity: 0.14,
+		shadowRadius: 8,
+		shadowOffset: { width: 0, height: 3 },
+		elevation: 4,
+	},
+	shareMenuItem: {
+		paddingVertical: 10,
+		paddingHorizontal: 12,
+	},
+	shareMenuItemText: {
+		fontSize: 14,
+		fontWeight: '600',
+		color: '#1f2937',
 	},
 	exportError: {
+		marginBottom: 10,
+		fontSize: 13,
+		color: '#b91c1c',
+	},
+	importError: {
 		marginBottom: 10,
 		fontSize: 13,
 		color: '#b91c1c',
