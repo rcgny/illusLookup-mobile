@@ -13,6 +13,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 - Phase 2.7: Added unified search/sort filtering, stable selection for duplicate topics, keyboard behavior updates, and focus-refresh behavior.
 - Phase 2.9 Step 1: Added on-device export actions for a shareable SQLite backup file and a JSON dump.
 - Phase 2.9 Step 2: Added on-device SQLite `.db` import to restore shared backups.
+- Phase 2.9 Step 3: Switched startup seed behavior to one-time marker-based seeding per DB lifecycle.
 
 ### Phase 2 Detailed Steps (2.4 to 2.7)
 
@@ -58,6 +59,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 3. Phase 2.9 Step 2: Added Home-screen import action that restores data from a selected SQLite `.db` backup.
 4. Phase 2.9 Step 2: Import flow validates expected tables, replaces local DB contents, and refreshes Home rows.
 5. Phase 2.9 Step 2: Added pre-import snapshot + automatic rollback so failed imports restore previous local data.
+6. Phase 2.9 Step 3: Seed rows now run once per database lifecycle using `app_meta.seed_complete_v1`; deleting all rows no longer auto-reseeds.
 
 ## Phase 2.8 Samsung Phone Setup
 
