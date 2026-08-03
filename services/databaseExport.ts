@@ -20,6 +20,23 @@ type ImportResult = {
 	importedRows: number;
 };
 
+type InventoryStats = {
+	illustrationCount: number;
+	normalizedTopics: string[];
+};
+
+export type ImportPreviewResult = {
+	fileName: string;
+	currentIllustrationCount: number;
+	importIllustrationCount: number;
+	currentTopicCount: number;
+	importTopicCount: number;
+	overlapPercent: number;
+	addedTopicCount: number;
+	removedTopicCount: number;
+	isSameInventorySummary: boolean;
+};
+
 const EXPORTS_DIR_NAME = 'illuslookup-exports';
 const IMPORTS_DIR_NAME = 'illuslookup-imports';
 
@@ -68,6 +85,135 @@ async function shareExport(file: File, mimeType: string): Promise<boolean> {
 	});
 
 	return true;
+}
+
+async function getInventoryStats(
+	db: SQLite.SQLiteDatabase,
+): Promise<InventoryStats> {
+	const countRow = await db.getFirstAsync<{ count: number }>(
+		'SELECT COUNT(*) as count FROM illustrations',
+	);
+	const topicRows = await db.getAllAsync<{ topic: string }>(
+		`SELECT DISTINCT LOWER(TRIM(topic)) as topic
+		 FROM illustrations
+		 WHERE LENGTH(TRIM(topic)) > 0
+		 ORDER BY topic COLLATE NOCASE`,
+	);
+
+	return {
+		illustrationCount: countRow?.count ?? 0,
+		normalizedTopics: topicRows.map((row) => row.topic),
+	};
+}
+
+/**
+ * Phase 2.9.4 Step 1:
+ * - Previews a candidate SQLite backup and compares it with current local data.
+ * - Computes summary-only inventory metrics without overwriting the local DB.
+ *
+ * @returns {Promise<ImportPreviewResult | null>} Preview metrics, or null when picker is canceled.
+ */
+export async function previewSQLiteDatabaseImport(): Promise<ImportPreviewResult | null> {
+	let selectedFile: File;
+	let previewSourceDb: SQLite.SQLiteDatabase | null = null;
+	let sqliteDirectory: Directory | null = null;
+	const stagedPreviewDbName = `illuslookup-preview-${createExportStamp()}.db`;
+
+	try {
+		// Phase 2.9.4 Step 1: reuse the stable picker call form used by import.
+		selectedFile = await File.pickFileAsync(undefined, '*/*');
+	} catch (pickIssue) {
+		const pickMessage =
+			pickIssue instanceof Error ? pickIssue.message.toLowerCase() : '';
+		if (
+			pickMessage.includes('cancel') ||
+			pickMessage.includes('canceled') ||
+			pickMessage.includes('cancelled')
+		) {
+			return null;
+		}
+		throw pickIssue;
+	}
+
+	try {
+		await initializeDatabase();
+		const destinationDb = await getDb();
+		sqliteDirectory = new Directory(getSQLiteDirectoryUri());
+
+		// Phase 2.9.4 Step 1: stage picker bytes into SQLite directory, no local overwrite.
+		const previewBytes = await selectedFile.bytes();
+		const stagedPreviewDbFile = new File(sqliteDirectory, stagedPreviewDbName);
+		stagedPreviewDbFile.create({ intermediates: true, overwrite: true });
+		stagedPreviewDbFile.write(previewBytes);
+
+		previewSourceDb = await SQLite.openDatabaseAsync(stagedPreviewDbName, {
+			useNewConnection: true,
+		});
+
+		const tableCheck = await previewSourceDb.getFirstAsync<{ count: number }>(
+			`SELECT COUNT(*) as count
+			 FROM sqlite_master
+			 WHERE type = 'table' AND name = 'illustrations'`,
+		);
+
+		if (!tableCheck || tableCheck.count === 0) {
+			throw new Error('The selected file is not a valid Illus Mobile backup.');
+		}
+
+		const currentStats = await getInventoryStats(destinationDb);
+		const importStats = await getInventoryStats(previewSourceDb);
+
+		const currentTopics = new Set(currentStats.normalizedTopics);
+		const importTopics = new Set(importStats.normalizedTopics);
+		const overlapCount = importStats.normalizedTopics.filter((topic) =>
+			currentTopics.has(topic),
+		).length;
+		const addedTopicCount = importStats.normalizedTopics.filter(
+			(topic) => !currentTopics.has(topic),
+		).length;
+		const removedTopicCount = currentStats.normalizedTopics.filter(
+			(topic) => !importTopics.has(topic),
+		).length;
+		const overlapBase = Math.max(
+			currentStats.normalizedTopics.length,
+			importStats.normalizedTopics.length,
+		);
+		const overlapPercent =
+			overlapBase === 0 ? 100 : Math.round((overlapCount / overlapBase) * 100);
+
+		return {
+			fileName: selectedFile.name,
+			currentIllustrationCount: currentStats.illustrationCount,
+			importIllustrationCount: importStats.illustrationCount,
+			currentTopicCount: currentStats.normalizedTopics.length,
+			importTopicCount: importStats.normalizedTopics.length,
+			overlapPercent,
+			addedTopicCount,
+			removedTopicCount,
+			isSameInventorySummary:
+				currentStats.illustrationCount === importStats.illustrationCount &&
+				addedTopicCount === 0 &&
+				removedTopicCount === 0,
+		};
+	} finally {
+		if (previewSourceDb) {
+			await previewSourceDb.closeAsync();
+		}
+		if (sqliteDirectory) {
+			const filesToDelete = [
+				stagedPreviewDbName,
+				`${stagedPreviewDbName}-wal`,
+				`${stagedPreviewDbName}-shm`,
+			];
+
+			for (const fileName of filesToDelete) {
+				const file = new File(sqliteDirectory, fileName);
+				if (file.exists) {
+					file.delete();
+				}
+			}
+		}
+	}
 }
 
 /**
