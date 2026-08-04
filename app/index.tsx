@@ -123,44 +123,62 @@ export default function IndexScreen() {
 		return items;
 	}, [items]);
 
+	const clearTransferErrors = useCallback(() => {
+		// Phase 2.9.4 Step 3: Clear stale transfer errors once user continues interacting.
+		setExportError(null);
+		setImportError(null);
+	}, []);
+
 	// SECTION 5: Combo-box actions
 	// Phase 2.4 Step 1 controls: open/close, type-search, select, and clear.
 	const toggleCombo = useCallback(() => {
+		clearTransferErrors();
 		setComboOpen((open) => {
 			return !open;
 		});
-	}, []);
+	}, [clearTransferErrors]);
 
-	const selectTopic = useCallback((topic: string) => {
-		setKeywordInput(topic);
-		setKeywordSearch(topic);
-		setComboOpen(false);
-		Keyboard.dismiss();
-	}, []);
+	const selectTopic = useCallback(
+		(topic: string) => {
+			clearTransferErrors();
+			setKeywordInput(topic);
+			setKeywordSearch(topic);
+			setComboOpen(false);
+			Keyboard.dismiss();
+		},
+		[clearTransferErrors],
+	);
 
 	const clearSelection = useCallback(() => {
+		clearTransferErrors();
 		// Phase 2.7 Step 3: One-tap reset for search + sort defaults.
 		setKeywordInput('');
 		setKeywordSearch('');
 		setSortMode('az');
 		setComboOpen(false);
 		Keyboard.dismiss();
-	}, []);
+	}, [clearTransferErrors]);
 
-	const onComboSearchChange = useCallback((value: string) => {
-		setComboOpen(true);
-		setKeywordInput(value);
-	}, []);
+	const onComboSearchChange = useCallback(
+		(value: string) => {
+			clearTransferErrors();
+			setComboOpen(true);
+			setKeywordInput(value);
+		},
+		[clearTransferErrors],
+	);
 
 	const toggleComboFromZone = useCallback(() => {
+		clearTransferErrors();
 		setComboOpen((open) => {
 			return !open;
 		});
-	}, []);
+	}, [clearTransferErrors]);
 
 	const closeCombo = useCallback(() => {
+		clearTransferErrors();
 		setComboOpen(false);
-	}, []);
+	}, [clearTransferErrors]);
 
 	const runExport = useCallback(async (kind: 'db' | 'json') => {
 		try {
@@ -195,6 +213,8 @@ export default function IndexScreen() {
 			return;
 		}
 
+		clearTransferErrors();
+
 		Alert.alert('Export Illus Mobile Data', 'Choose an export format.', [
 			{
 				text: 'SQLite DB',
@@ -213,7 +233,7 @@ export default function IndexScreen() {
 				style: 'cancel',
 			},
 		]);
-	}, [exporting, importing, runExport]);
+	}, [clearTransferErrors, exporting, importing, runExport]);
 
 	const runImport = useCallback(async () => {
 		try {
@@ -248,6 +268,8 @@ export default function IndexScreen() {
 			return;
 		}
 
+		clearTransferErrors();
+
 		Alert.alert(
 			'Import SQLite Backup',
 			'Choose a .db backup file. Import will replace current local data on this device.',
@@ -264,39 +286,45 @@ export default function IndexScreen() {
 				},
 			],
 		);
-	}, [exporting, importing, runImport]);
+	}, [clearTransferErrors, exporting, importing, runImport]);
 
 	const toggleShareDataMenu = useCallback(() => {
 		if (importing || exporting) {
 			return;
 		}
 
+		clearTransferErrors();
+
 		// Phase 2.9 Step 3: compact in-screen menu opens/closes from the Share data button.
 		setShareMenuOpen((open) => !open);
-	}, [exporting, importing]);
+	}, [clearTransferErrors, exporting, importing]);
 
 	const closeShareDataMenu = useCallback(() => {
+		clearTransferErrors();
 		setShareMenuOpen(false);
-	}, []);
+	}, [clearTransferErrors]);
 
 	const onShareImportPress = useCallback(() => {
 		// Phase 2.9 Step 3: close menu first so outside tap behavior stays consistent.
+		clearTransferErrors();
 		setShareMenuOpen(false);
 		openImportConfirmation();
-	}, [openImportConfirmation]);
+	}, [clearTransferErrors, openImportConfirmation]);
 
 	const onShareExportPress = useCallback(() => {
 		// Phase 2.9 Step 3: close menu first so outside tap behavior stays consistent.
+		clearTransferErrors();
 		setShareMenuOpen(false);
 		openExportChooser();
-	}, [openExportChooser]);
+	}, [clearTransferErrors, openExportChooser]);
 
 	// Phase 2.6.1 Step 2: Open fullscreen read-only illustration card.
 	const openReadOnlyCard = useCallback(
 		(id: number) => {
+			clearTransferErrors();
 			router.push(`/illustration/${id}`);
 		},
-		[router],
+		[clearTransferErrors, router],
 	);
 
 	// SECTION 7: Render
@@ -338,7 +366,10 @@ export default function IndexScreen() {
 						styles.filterChip,
 						sortMode === 'newest' && styles.filterChipActive,
 					]}
-					onPress={() => setSortMode('newest')}
+					onPress={() => {
+						clearTransferErrors();
+						setSortMode('newest');
+					}}
 				>
 					<Text
 						style={[
@@ -354,7 +385,10 @@ export default function IndexScreen() {
 						styles.filterChip,
 						sortMode === 'az' && styles.filterChipActive,
 					]}
-					onPress={() => setSortMode('az')}
+					onPress={() => {
+						clearTransferErrors();
+						setSortMode('az');
+					}}
 				>
 					<Text
 						style={[
@@ -370,19 +404,28 @@ export default function IndexScreen() {
 			<View style={styles.quickActionsRow}>
 				<Pressable
 					style={styles.actionBtn}
-					onPress={() => router.push('/create')}
+					onPress={() => {
+						clearTransferErrors();
+						router.push('/create');
+					}}
 				>
 					<Text style={styles.actionText}>Create</Text>
 				</Pressable>
 				<Pressable
 					style={styles.actionBtn}
-					onPress={() => router.push('/edit')}
+					onPress={() => {
+						clearTransferErrors();
+						router.push('/edit');
+					}}
 				>
 					<Text style={styles.actionText}>Edit</Text>
 				</Pressable>
 				<Pressable
 					style={styles.actionBtn}
-					onPress={() => router.push('/delete')}
+					onPress={() => {
+						clearTransferErrors();
+						router.push('/delete');
+					}}
 				>
 					<Text style={styles.actionText}>Delete</Text>
 				</Pressable>

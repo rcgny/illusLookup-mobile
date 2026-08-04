@@ -238,7 +238,7 @@ export async function previewSQLiteDatabaseImport(): Promise<ImportPreviewResult
 		stagedImportPreviews.set(previewToken, {
 			previewToken,
 			fileName: selectedFile.name,
-			stagedImportDbName,
+			stagedImportDbName: stagedPreviewDbName,
 			sqliteDirectoryUri: sqliteDirectory.uri,
 		});
 		keepStagedPreview = true;
