@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
 	Alert,
@@ -12,12 +12,22 @@ import {
 } from 'react-native';
 import { TopicComboBox } from '../components/TopicComboBox';
 import {
+	commitPreviewedSQLiteDatabaseImport,
+	discardPreviewSQLiteDatabaseImport,
+	exportSafetyTempBackup,
+	exportSafetyTempBackupToDownloads,
 	exportSQLiteDatabaseBackup,
 	exportSQLiteJsonDump,
-	importSQLiteDatabaseBackup,
+	previewSQLiteDatabaseImport,
 } from '../services/databaseExport';
 import { listIllustrations } from '../services/illustrationsRepo';
 import { Illustration } from '../types/illustration';
+
+type ImportSummaryDecision =
+	| 'cancel'
+	| 'continue'
+	| 'backup-continue'
+	| 'backup-download-continue';
 
 /**
  * Home screen for browsing locally stored illustrations.
@@ -50,6 +60,11 @@ export default function IndexScreen() {
 	const [exportError, setExportError] = useState<string | null>(null);
 	const [importError, setImportError] = useState<string | null>(null);
 	const [shareMenuOpen, setShareMenuOpen] = useState(false);
+	const [pendingImportSummary, setPendingImportSummary] =
+		useState<Awaited<ReturnType<typeof previewSQLiteDatabaseImport>>>(null);
+	const importSummaryResolverRef = useRef<
+		((decision: ImportSummaryDecision) => void) | null
+	>(null);
 	const SEARCH_IDLE_MS = 700;
 
 	// SECTION 2: Data loading
@@ -128,6 +143,30 @@ export default function IndexScreen() {
 		setExportError(null);
 		setImportError(null);
 	}, []);
+
+	const promptImportSummaryDecision = useCallback(
+		(
+			preview: NonNullable<
+				Awaited<ReturnType<typeof previewSQLiteDatabaseImport>>
+			>,
+		): Promise<ImportSummaryDecision> => {
+			setPendingImportSummary(preview);
+			return new Promise<ImportSummaryDecision>((resolve) => {
+				importSummaryResolverRef.current = resolve;
+			});
+		},
+		[],
+	);
+
+	const resolveImportSummaryDecision = useCallback(
+		(decision: ImportSummaryDecision) => {
+			setPendingImportSummary(null);
+			const resolver = importSummaryResolverRef.current;
+			importSummaryResolverRef.current = null;
+			resolver?.(decision);
+		},
+		[],
+	);
 
 	// SECTION 5: Combo-box actions
 	// Phase 2.4 Step 1 controls: open/close, type-search, select, and clear.
@@ -236,15 +275,47 @@ export default function IndexScreen() {
 	}, [clearTransferErrors, exporting, importing, runExport]);
 
 	const runImport = useCallback(async () => {
+		let previewTokenToCleanup: string | null = null;
 		try {
 			setImporting(true);
 			setImportError(null);
 
-			// Phase 2.9 Step 2: Pick a `.db` backup and restore device-local SQLite data from it.
-			const result = await importSQLiteDatabaseBackup();
-			if (!result) {
+			// Phase 2.9.4 Step 4: Run preview first and only commit after explicit user choice.
+			const preview = await previewSQLiteDatabaseImport();
+			if (!preview) {
 				return;
 			}
+			previewTokenToCleanup = preview.previewToken;
+
+			const decision = await promptImportSummaryDecision(preview);
+
+			if (decision === 'cancel') {
+				await discardPreviewSQLiteDatabaseImport(preview.previewToken);
+				previewTokenToCleanup = null;
+				return;
+			}
+
+			if (decision === 'backup-continue') {
+				const backupResult = await exportSafetyTempBackup();
+				const backupMessage = backupResult.shared
+					? `${backupResult.fileName} was saved and share sheet opened.`
+					: `${backupResult.fileName} was saved in the app documents export folder.`;
+				Alert.alert('Safety Backup Created', backupMessage);
+			}
+
+			if (decision === 'backup-download-continue') {
+				// Phase 2.9.4 Step 5: explicit device-folder save path for predictable recovery.
+				const backupResult = await exportSafetyTempBackupToDownloads();
+				Alert.alert(
+					'Safety Backup Saved',
+					`${backupResult.fileName} was saved to the selected folder via Android folder picker.`,
+				);
+			}
+
+			const result = await commitPreviewedSQLiteDatabaseImport(
+				preview.previewToken,
+			);
+			previewTokenToCleanup = null;
 
 			const message = `Imported ${result.fileName}. Illustrations now: ${result.importedRows}.`;
 			Alert.alert('Import Complete', message);
@@ -252,6 +323,14 @@ export default function IndexScreen() {
 			// Refresh Home list immediately so imported rows appear without navigation.
 			await load();
 		} catch (importIssue) {
+			if (previewTokenToCleanup) {
+				await discardPreviewSQLiteDatabaseImport(previewTokenToCleanup).catch(
+					() => {
+						/* no-op cleanup fallback */
+					},
+				);
+			}
+
 			const message =
 				importIssue instanceof Error
 					? importIssue.message
@@ -261,7 +340,7 @@ export default function IndexScreen() {
 		} finally {
 			setImporting(false);
 		}
-	}, [load]);
+	}, [load, promptImportSummaryDecision]);
 
 	const openImportConfirmation = useCallback(() => {
 		if (importing || exporting) {
@@ -331,6 +410,13 @@ export default function IndexScreen() {
 	// Layout order: title -> search -> action buttons -> status states -> list.
 	return (
 		<View style={styles.screen}>
+			{pendingImportSummary && (
+				<Pressable
+					style={styles.importSummaryBackdrop}
+					onPress={() => resolveImportSummaryDecision('cancel')}
+				/>
+			)}
+
 			{shareMenuOpen && (
 				<Pressable
 					style={styles.shareMenuBackdrop}
@@ -459,6 +545,78 @@ export default function IndexScreen() {
 					</Pressable>
 				</View>
 			)}
+			{pendingImportSummary && (
+				<View style={styles.importSummaryPanel}>
+					<Text style={styles.importSummaryTitle}>Review Import Summary</Text>
+					<Text style={styles.importSummaryLine}>
+						{`File: ${pendingImportSummary.fileName}`}
+					</Text>
+					<Text
+						style={styles.importSummaryLine}
+					>{`Current: ${pendingImportSummary.currentIllustrationCount} illustrations, ${pendingImportSummary.currentTopicCount} topics`}</Text>
+					<Text
+						style={styles.importSummaryLine}
+					>{`Import: ${pendingImportSummary.importIllustrationCount} illustrations, ${pendingImportSummary.importTopicCount} topics`}</Text>
+					<Text
+						style={styles.importSummaryLine}
+					>{`Added illustrations: ${pendingImportSummary.addedIllustrationCount}`}</Text>
+					<Text
+						style={styles.importSummaryLine}
+					>{`Removed illustrations: ${pendingImportSummary.removedIllustrationCount}`}</Text>
+					<Text
+						style={styles.importSummaryLine}
+					>{`Topic overlap: ${pendingImportSummary.overlapPercent}%`}</Text>
+					<Text
+						style={styles.importSummaryLine}
+					>{`Added topics: ${pendingImportSummary.addedTopicCount}`}</Text>
+					<Text
+						style={styles.importSummaryLine}
+					>{`Removed topics: ${pendingImportSummary.removedTopicCount}`}</Text>
+					{pendingImportSummary.isSameInventorySummary && (
+						<Text style={styles.importSummaryCaution}>
+							Current data and import data look similar; illustration
+							wording/content may still differ.
+						</Text>
+					)}
+					<View style={styles.importSummaryActions}>
+						<Pressable
+							style={[
+								styles.importSummaryActionBtn,
+								styles.importSummaryCancelBtn,
+							]}
+							onPress={() => resolveImportSummaryDecision('cancel')}
+						>
+							<Text style={styles.importSummaryActionText}>Cancel</Text>
+						</Pressable>
+						<Pressable
+							style={styles.importSummaryActionBtn}
+							onPress={() => resolveImportSummaryDecision('continue')}
+						>
+							<Text style={styles.importSummaryActionText}>
+								Continue Import
+							</Text>
+						</Pressable>
+						<Pressable
+							style={styles.importSummaryActionBtn}
+							onPress={() => resolveImportSummaryDecision('backup-continue')}
+						>
+							<Text style={styles.importSummaryActionText}>
+								Create Sharable Backup + Continue
+							</Text>
+						</Pressable>
+						<Pressable
+							style={styles.importSummaryActionBtn}
+							onPress={() =>
+								resolveImportSummaryDecision('backup-download-continue')
+							}
+						>
+							<Text style={styles.importSummaryActionText}>
+								Save Backup to Phone + Continue
+							</Text>
+						</Pressable>
+					</View>
+				</View>
+			)}
 			{exportError && <Text style={styles.exportError}>{exportError}</Text>}
 			{importError && <Text style={styles.importError}>{importError}</Text>}
 
@@ -503,6 +661,11 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 16,
 		paddingTop: 14,
 		backgroundColor: '#f6f7f9',
+	},
+	importSummaryBackdrop: {
+		...StyleSheet.absoluteFillObject,
+		zIndex: 35,
+		backgroundColor: 'rgba(15, 23, 42, 0.25)',
 	},
 	shareMenuBackdrop: {
 		...StyleSheet.absoluteFillObject,
@@ -595,6 +758,59 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		fontWeight: '600',
 		color: '#1f2937',
+	},
+	importSummaryPanel: {
+		zIndex: 40,
+		position: 'absolute',
+		top: 120,
+		left: 16,
+		right: 16,
+		backgroundColor: '#ffffff',
+		borderRadius: 12,
+		borderWidth: 1,
+		borderColor: '#cbd5e1',
+		padding: 14,
+		shadowColor: '#000000',
+		shadowOpacity: 0.18,
+		shadowRadius: 10,
+		shadowOffset: { width: 0, height: 4 },
+		elevation: 6,
+	},
+	importSummaryTitle: {
+		fontSize: 17,
+		fontWeight: '700',
+		color: '#111827',
+		marginBottom: 8,
+	},
+	importSummaryLine: {
+		fontSize: 14,
+		color: '#1f2937',
+		marginTop: 2,
+	},
+	importSummaryCaution: {
+		marginTop: 10,
+		fontSize: 14,
+		fontWeight: '700',
+		color: '#b91c1c',
+	},
+	importSummaryActions: {
+		marginTop: 12,
+		gap: 8,
+	},
+	importSummaryActionBtn: {
+		backgroundColor: '#2563eb',
+		borderRadius: 10,
+		paddingVertical: 10,
+		paddingHorizontal: 12,
+		alignItems: 'center',
+	},
+	importSummaryCancelBtn: {
+		backgroundColor: '#64748b',
+	},
+	importSummaryActionText: {
+		color: '#ffffff',
+		fontSize: 14,
+		fontWeight: '700',
 	},
 	exportError: {
 		marginBottom: 10,

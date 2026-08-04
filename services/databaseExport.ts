@@ -1,4 +1,5 @@
 import { Directory, File, Paths } from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as SQLite from 'expo-sqlite';
 import { DB_NAME, getDb, initializeDatabase } from '../db/database';
@@ -30,6 +31,8 @@ export type ImportPreviewResult = {
 	fileName: string;
 	currentIllustrationCount: number;
 	importIllustrationCount: number;
+	addedIllustrationCount: number;
+	removedIllustrationCount: number;
 	currentTopicCount: number;
 	importTopicCount: number;
 	overlapPercent: number;
@@ -49,6 +52,7 @@ type StagedImportPreview = {
 };
 
 const stagedImportPreviews = new Map<string, StagedImportPreview>();
+const { StorageAccessFramework } = FileSystemLegacy;
 
 function createExportStamp(): string {
 	return new Date().toISOString().replace(/[.:]/g, '-');
@@ -135,6 +139,18 @@ function cleanupSQLiteArtifacts(
 	for (const fileName of filesToDelete) {
 		deleteIfExists(new File(directory, fileName));
 	}
+}
+
+function createSafetyTempBackupFile(serializedDb: Uint8Array): File {
+	const exportFile = new File(
+		getExportsDirectory(),
+		`SAFETY-TEMP-BACKUP-${createExportStamp()}.db`,
+	);
+
+	exportFile.create({ intermediates: true, overwrite: true });
+	exportFile.write(serializedDb);
+
+	return exportFile;
 }
 
 /**
@@ -233,6 +249,14 @@ export async function previewSQLiteDatabaseImport(): Promise<ImportPreviewResult
 		);
 		const overlapPercent =
 			overlapBase === 0 ? 100 : Math.round((overlapCount / overlapBase) * 100);
+		const addedIllustrationCount = Math.max(
+			importStats.illustrationCount - currentStats.illustrationCount,
+			0,
+		);
+		const removedIllustrationCount = Math.max(
+			currentStats.illustrationCount - importStats.illustrationCount,
+			0,
+		);
 		const previewToken = createPreviewToken();
 
 		stagedImportPreviews.set(previewToken, {
@@ -248,6 +272,8 @@ export async function previewSQLiteDatabaseImport(): Promise<ImportPreviewResult
 			fileName: selectedFile.name,
 			currentIllustrationCount: currentStats.illustrationCount,
 			importIllustrationCount: importStats.illustrationCount,
+			addedIllustrationCount,
+			removedIllustrationCount,
 			currentTopicCount: currentStats.normalizedTopics.length,
 			importTopicCount: importStats.normalizedTopics.length,
 			overlapPercent,
@@ -473,6 +499,76 @@ export async function exportSQLiteJsonDump(): Promise<ExportResult> {
 		fileName: exportFile.name,
 		fileUri: exportFile.uri,
 		shared: await shareExport(exportFile, 'application/json'),
+	};
+}
+
+/**
+ * Phase 2.9.4 Step 4:
+ * - Creates a temporary safety backup before a destructive import commit.
+ * - Opens the share sheet so users can move backup to Downloads/Drive.
+ *
+ * @returns {Promise<ExportResult>} Metadata about the safety backup file.
+ */
+export async function exportSafetyTempBackup(): Promise<ExportResult> {
+	await initializeDatabase();
+	const db = await getDb();
+	const serializedDb = await db.serializeAsync();
+	const exportFile = createSafetyTempBackupFile(serializedDb);
+
+	return {
+		fileName: exportFile.name,
+		fileUri: exportFile.uri,
+		shared: await shareExport(exportFile, 'application/octet-stream'),
+	};
+}
+
+/**
+ * Phase 2.9.4 Step 5:
+ * - Creates a temporary safety backup and saves it through Android SAF.
+ * - User can choose Downloads directly from the system folder picker.
+ *
+ * @returns {Promise<ExportResult>} Metadata about the saved safety backup file.
+ */
+export async function exportSafetyTempBackupToDownloads(): Promise<ExportResult> {
+	await initializeDatabase();
+	const db = await getDb();
+	const serializedDb = await db.serializeAsync();
+	const exportFile = createSafetyTempBackupFile(serializedDb);
+
+	// Phase 2.9.4 Step 5: allow user-selected folder because some Android builds block root Downloads.
+	const directoryPermission =
+		await StorageAccessFramework.requestDirectoryPermissionsAsync();
+
+	if (!directoryPermission.granted || !directoryPermission.directoryUri) {
+		throw new Error(
+			'Folder access was not granted. On some phones, Android blocks the root Downloads folder. Choose a different folder or a subfolder inside Downloads, then retry.',
+		);
+	}
+
+	let safFileUri = '';
+	try {
+		const safFileName = exportFile.name.replace(/\.db$/i, '');
+		safFileUri = await StorageAccessFramework.createFileAsync(
+			directoryPermission.directoryUri,
+			safFileName,
+			'application/octet-stream',
+		);
+
+		await StorageAccessFramework.writeAsStringAsync(
+			safFileUri,
+			exportFile.base64Sync(),
+			{ encoding: FileSystemLegacy.EncodingType.Base64 },
+		);
+	} catch {
+		throw new Error(
+			"Android couldn't save in that folder. Pick a different folder (for example Documents or a subfolder inside Downloads) and retry.",
+		);
+	}
+
+	return {
+		fileName: exportFile.name,
+		fileUri: safFileUri,
+		shared: false,
 	};
 }
 
