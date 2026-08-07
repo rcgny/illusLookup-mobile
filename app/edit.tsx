@@ -64,9 +64,15 @@ export default function EditScreen() {
 		return items.find((item) => item.id === selectedId) ?? null;
 	}, [items, selectedId]);
 
-	// Phase 2.7 Step 5: Use id-qualified labels so records with shared topics remain selectable.
-	const toOptionLabel = useCallback((item: Illustration) => {
-		return `${item.topic} (ID ${item.id})`;
+	// Phase 2.9.5 Step 2: Show topic + first 2 words of illustration instead of numeric ID.
+	const toOptionBaseLabel = useCallback((item: Illustration) => {
+		const words = item.illus.trim().split(/\s+/).filter(Boolean);
+		const previewWords = words.slice(0, 2).join(' ');
+		const hasMoreWords = words.length > 2;
+		const previewText = previewWords
+			? `${previewWords}${hasMoreWords ? '...' : ''}`
+			: 'No illustration text';
+		return `${item.topic} (${previewText})`;
 	}, []);
 
 	const routeEditId = useMemo(() => {
@@ -101,13 +107,26 @@ export default function EditScreen() {
 	}, [sortedItems, topicSearch]);
 
 	const filteredOptions = useMemo(() => {
-		return filteredItems.map(toOptionLabel);
-	}, [filteredItems, toOptionLabel]);
+		const labelCounts = new Map<string, number>();
+
+		return filteredItems.map((item) => {
+			const baseLabel = toOptionBaseLabel(item);
+			const nextCount = (labelCounts.get(baseLabel) ?? 0) + 1;
+			labelCounts.set(baseLabel, nextCount);
+
+			if (nextCount === 1) {
+				return baseLabel;
+			}
+
+			// Duplicate-safe suffix keeps labels selectable without reintroducing IDs.
+			return `${baseLabel} (${nextCount})`;
+		});
+	}, [filteredItems, toOptionBaseLabel]);
 
 	const selectedOptionLabel = useMemo(() => {
 		if (!selectedItem) return '';
-		return toOptionLabel(selectedItem);
-	}, [selectedItem, toOptionLabel]);
+		return toOptionBaseLabel(selectedItem);
+	}, [selectedItem, toOptionBaseLabel]);
 
 	const fieldErrors = useMemo(() => {
 		return {
@@ -166,7 +185,7 @@ export default function EditScreen() {
 				if (routeMatch) {
 					setSelectedId(routeMatch.id);
 					syncFormFromItem(routeMatch);
-					setTopicSearch(toOptionLabel(routeMatch));
+					setTopicSearch(toOptionBaseLabel(routeMatch));
 					setComboOpen(false);
 					setRoutePrefillApplied(true);
 					return;
@@ -182,7 +201,7 @@ export default function EditScreen() {
 				setSelectedId(nextSelected?.id ?? null);
 				if (nextSelected) {
 					syncFormFromItem(nextSelected);
-					setTopicSearch(toOptionLabel(nextSelected));
+					setTopicSearch(toOptionBaseLabel(nextSelected));
 				}
 			} else {
 				setSelectedId(null);
@@ -199,7 +218,7 @@ export default function EditScreen() {
 		routePrefillApplied,
 		selectedId,
 		syncFormFromItem,
-		toOptionLabel,
+		toOptionBaseLabel,
 	]);
 
 	useFocusEffect(
@@ -210,7 +229,7 @@ export default function EditScreen() {
 
 	const selectItem = (item: Illustration) => {
 		setSelectedId(item.id);
-		setTopicSearch(toOptionLabel(item));
+		setTopicSearch(toOptionBaseLabel(item));
 		setComboOpen(false);
 		syncFormFromItem(item);
 		setErrorMessage(null);
@@ -222,21 +241,21 @@ export default function EditScreen() {
 		setComboOpen((open) => {
 			const next = !open;
 			if (next) {
-				setTopicSearch(selectedItem ? toOptionLabel(selectedItem) : '');
+				setTopicSearch(selectedItem ? toOptionBaseLabel(selectedItem) : '');
 			}
 			return next;
 		});
-	}, [selectedItem, toOptionLabel]);
+	}, [selectedItem, toOptionBaseLabel]);
 
 	const toggleComboFromZone = useCallback(() => {
 		setComboOpen((open) => {
 			const next = !open;
 			if (next) {
-				setTopicSearch(selectedItem ? toOptionLabel(selectedItem) : '');
+				setTopicSearch(selectedItem ? toOptionBaseLabel(selectedItem) : '');
 			}
 			return next;
 		});
-	}, [selectedItem, toOptionLabel]);
+	}, [selectedItem, toOptionBaseLabel]);
 
 	const closeCombo = useCallback(() => {
 		setComboOpen(false);
@@ -326,43 +345,59 @@ export default function EditScreen() {
 					Select an existing item, update fields, then save changes.
 				</Text>
 
-				<Text style={styles.sectionTitle}>Choose Illustration</Text>
-				{loadingList && (
-					<ActivityIndicator size="small" style={styles.loader} />
-				)}
-				{!loadingList && items.length === 0 && (
-					<Text style={styles.empty}>No illustrations available to edit.</Text>
-				)}
+				{!selectedItem && (
+					<>
+						<Text style={styles.sectionTitle}>Choose Illustration</Text>
+						{loadingList && (
+							<ActivityIndicator size="small" style={styles.loader} />
+						)}
+						{!loadingList && items.length === 0 && (
+							<Text style={styles.empty}>
+								No illustrations available to edit.
+							</Text>
+						)}
 
-				{!loadingList && items.length > 0 && (
-					<TopicComboBox
-						value={comboOpen ? topicSearch : selectedOptionLabel}
-						onChangeText={onComboSearchChange}
-						placeholder="Select Illustration"
-						isOpen={comboOpen}
-						onToggle={toggleCombo}
-						onRequestClose={closeCombo}
-						onToggleFromZone={toggleComboFromZone}
-						options={filteredOptions}
-						onSelectOption={(optionLabel) => {
-							const match = filteredItems.find(
-								(row) => toOptionLabel(row) === optionLabel,
-							);
-							if (!match) return;
-							selectItem(match);
-						}}
-						showClear={Boolean(selectedItem || topicSearch)}
-						onClear={clearSelection}
-						showOpenZone={!selectedItem && !topicSearch.trim()}
-						emptyMessage="No matching topics."
-						containerStyle={styles.comboContainer}
-					/>
+						{!loadingList && items.length > 0 && (
+							<TopicComboBox
+								value={comboOpen ? topicSearch : selectedOptionLabel}
+								onChangeText={onComboSearchChange}
+								placeholder="Select Illustration"
+								isOpen={comboOpen}
+								onToggle={toggleCombo}
+								onRequestClose={closeCombo}
+								onToggleFromZone={toggleComboFromZone}
+								options={filteredOptions}
+								onSelectOption={(optionLabel) => {
+									const matchIndex = filteredOptions.indexOf(optionLabel);
+									if (matchIndex < 0) return;
+
+									const match = filteredItems[matchIndex];
+									if (!match) return;
+									selectItem(match);
+								}}
+								showClear={Boolean(selectedItem || topicSearch)}
+								onClear={clearSelection}
+								showOpenZone={!selectedItem && !topicSearch.trim()}
+								emptyMessage="No matching topics."
+								containerStyle={styles.comboContainer}
+							/>
+						)}
+					</>
 				)}
 
 				<Text style={styles.sectionTitle}>Edit Fields</Text>
 
 				{selectedItem ? (
 					<>
+						{/* Phase 2.9.5 Step 2: Keep edit screen focused by hiding selector after pick. */}
+						<Text style={styles.selectedSummary}>{selectedOptionLabel}</Text>
+						<Pressable
+							style={styles.changeSelectionBtn}
+							onPress={clearSelection}
+						>
+							<Text style={styles.changeSelectionText}>{'<- Back'}</Text>
+						</Pressable>
+
 						<Text style={styles.label}>Topic</Text>
 						<TextInput
 							value={form.topic}
@@ -480,6 +515,22 @@ const styles = StyleSheet.create({
 	comboContainer: {
 		marginBottom: 10,
 		zIndex: 20,
+	},
+	selectedSummary: {
+		fontSize: 13,
+		color: '#374151',
+		marginBottom: 8,
+	},
+	changeSelectionBtn: {
+		alignSelf: 'flex-start',
+		paddingVertical: 4,
+		paddingHorizontal: 0,
+		marginBottom: 8,
+	},
+	changeSelectionText: {
+		fontSize: 13,
+		fontWeight: '700',
+		color: '#2563eb',
 	},
 	label: {
 		fontSize: 13,
