@@ -442,9 +442,10 @@ export default function IndexScreen() {
 				emptyMessage="No matching topics for this filter."
 				containerStyle={styles.comboContainer}
 			/>
-			<Text
-				style={styles.countLabel}
-			>{`Illustrations: ${visibleItems.length}`}</Text>
+			<Text style={styles.countLabel}>
+				{/* Phase 2.9.5 Step 1: Show topics first, then illustrations for quick scope context. */}
+				{`Topics: ${filteredTopics.length} | Illustrations: ${visibleItems.length}`}
+			</Text>
 
 			<View style={styles.filtersRow}>
 				<Pressable
