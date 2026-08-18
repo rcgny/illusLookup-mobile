@@ -64,9 +64,15 @@ export default function DeleteScreen() {
 			? null
 			: (items.find((item) => item.id === selectedId) ?? null);
 
-	// Phase 2.7 Step 5: Use id-qualified labels so records with shared topics remain selectable.
-	const toOptionLabel = useCallback((item: Illustration) => {
-		return `${item.topic} (ID ${item.id})`;
+	// Phase 2.9.5 Step 3: Show topic + first 2 illustration words instead of numeric ID.
+	const toOptionBaseLabel = useCallback((item: Illustration) => {
+		const words = item.illus.trim().split(/\s+/).filter(Boolean);
+		const previewWords = words.slice(0, 2).join(' ');
+		const hasMoreWords = words.length > 2;
+		const previewText = previewWords
+			? `${previewWords}${hasMoreWords ? '...' : ''}`
+			: 'No illustration text';
+		return `${item.topic} (${previewText})`;
 	}, []);
 
 	const sortedItems = useMemo(() => {
@@ -93,13 +99,26 @@ export default function DeleteScreen() {
 	}, [sortedItems, topicSearch]);
 
 	const filteredOptions = useMemo(() => {
-		return filteredItems.map(toOptionLabel);
-	}, [filteredItems, toOptionLabel]);
+		const labelCounts = new Map<string, number>();
+
+		return filteredItems.map((item) => {
+			const baseLabel = toOptionBaseLabel(item);
+			const nextCount = (labelCounts.get(baseLabel) ?? 0) + 1;
+			labelCounts.set(baseLabel, nextCount);
+
+			if (nextCount === 1) {
+				return baseLabel;
+			}
+
+			// Phase 2.9.5 Step 3: Keep duplicate labels selectable without reintroducing IDs.
+			return `${baseLabel} (${nextCount})`;
+		});
+	}, [filteredItems, toOptionBaseLabel]);
 
 	const selectedOptionLabel = useMemo(() => {
 		if (!selectedItem) return '';
-		return toOptionLabel(selectedItem);
-	}, [selectedItem, toOptionLabel]);
+		return toOptionBaseLabel(selectedItem);
+	}, [selectedItem, toOptionBaseLabel]);
 
 	// SECTION 2: Load items when screen becomes active
 	const load = useCallback(async () => {
@@ -126,7 +145,7 @@ export default function DeleteScreen() {
 
 				if (routeMatch) {
 					setSelectedId(routeMatch.id);
-					setTopicSearch(toOptionLabel(routeMatch));
+					setTopicSearch(toOptionBaseLabel(routeMatch));
 					setComboOpen(false);
 					setRoutePrefillApplied(true);
 					return;
@@ -141,7 +160,7 @@ export default function DeleteScreen() {
 
 			if (stillExists) {
 				const existing = data.find((item) => item.id === selectedId);
-				setTopicSearch(existing ? toOptionLabel(existing) : '');
+				setTopicSearch(existing ? toOptionBaseLabel(existing) : '');
 			} else {
 				setTopicSearch('');
 			}
@@ -150,7 +169,7 @@ export default function DeleteScreen() {
 		} finally {
 			setLoadingList(false);
 		}
-	}, [routeDeleteId, routePrefillApplied, selectedId, toOptionLabel]);
+	}, [routeDeleteId, routePrefillApplied, selectedId, toOptionBaseLabel]);
 
 	useFocusEffect(
 		useCallback(() => {
@@ -158,9 +177,9 @@ export default function DeleteScreen() {
 		}, [load]),
 	);
 
-	const handleSelect = (id: number, optionLabel: string) => {
-		setSelectedId(id);
-		setTopicSearch(optionLabel);
+	const handleSelect = (item: Illustration) => {
+		setSelectedId(item.id);
+		setTopicSearch(toOptionBaseLabel(item));
 		setComboOpen(false);
 		setErrorMessage(null);
 		setSuccessMessage(null);
@@ -170,21 +189,21 @@ export default function DeleteScreen() {
 		setComboOpen((open) => {
 			const next = !open;
 			if (next) {
-				setTopicSearch(selectedItem ? toOptionLabel(selectedItem) : '');
+				setTopicSearch(selectedItem ? toOptionBaseLabel(selectedItem) : '');
 			}
 			return next;
 		});
-	}, [selectedItem, toOptionLabel]);
+	}, [selectedItem, toOptionBaseLabel]);
 
 	const toggleComboFromZone = useCallback(() => {
 		setComboOpen((open) => {
 			const next = !open;
 			if (next) {
-				setTopicSearch(selectedItem ? toOptionLabel(selectedItem) : '');
+				setTopicSearch(selectedItem ? toOptionBaseLabel(selectedItem) : '');
 			}
 			return next;
 		});
-	}, [selectedItem, toOptionLabel]);
+	}, [selectedItem, toOptionBaseLabel]);
 
 	const closeCombo = useCallback(() => {
 		setComboOpen(false);
@@ -272,51 +291,68 @@ export default function DeleteScreen() {
 				Select from dropdown/search, review details, then confirm deletion.
 			</Text>
 
-			<Text style={styles.sectionTitle}>Choose Illustration</Text>
-			{loadingList && <ActivityIndicator size="small" style={styles.loader} />}
-			{!loadingList && items.length === 0 && (
-				<Text style={styles.empty}>No illustrations available to delete.</Text>
-			)}
+			{!selectedItem && (
+				<>
+					<Text style={styles.sectionTitle}>Choose Illustration</Text>
+					{loadingList && (
+						<ActivityIndicator size="small" style={styles.loader} />
+					)}
+					{!loadingList && items.length === 0 && (
+						<Text style={styles.empty}>
+							No illustrations available to delete.
+						</Text>
+					)}
 
-			{!loadingList && items.length > 0 && (
-				<TopicComboBox
-					value={comboOpen ? topicSearch : selectedOptionLabel}
-					onChangeText={onComboSearchChange}
-					placeholder="Select Illustration"
-					isOpen={comboOpen}
-					onToggle={toggleCombo}
-					onRequestClose={closeCombo}
-					onToggleFromZone={toggleComboFromZone}
-					options={filteredOptions}
-					onSelectOption={(optionLabel) => {
-						const match = filteredItems.find(
-							(row) => toOptionLabel(row) === optionLabel,
-						);
-						if (!match) return;
-						handleSelect(match.id, optionLabel);
-					}}
-					showClear={Boolean(selectedItem || topicSearch)}
-					onClear={clearSelection}
-					showOpenZone={!selectedItem && !topicSearch.trim()}
-					emptyMessage="No matching topics."
-					containerStyle={styles.comboContainer}
-				/>
+					{!loadingList && items.length > 0 && (
+						<TopicComboBox
+							value={comboOpen ? topicSearch : selectedOptionLabel}
+							onChangeText={onComboSearchChange}
+							placeholder="Select Illustration"
+							isOpen={comboOpen}
+							onToggle={toggleCombo}
+							onRequestClose={closeCombo}
+							onToggleFromZone={toggleComboFromZone}
+							options={filteredOptions}
+							onSelectOption={(optionLabel) => {
+								const matchIndex = filteredOptions.indexOf(optionLabel);
+								if (matchIndex < 0) return;
+
+								const match = filteredItems[matchIndex];
+								if (!match) return;
+								handleSelect(match);
+							}}
+							showClear={Boolean(selectedItem || topicSearch)}
+							onClear={clearSelection}
+							showOpenZone={!selectedItem && !topicSearch.trim()}
+							emptyMessage="No matching topics."
+							containerStyle={styles.comboContainer}
+						/>
+					)}
+				</>
 			)}
 
 			<Text style={styles.sectionTitle}>Selected Preview</Text>
 			{selectedItem ? (
-				<View style={styles.previewCard}>
-					<Text style={styles.previewTopic}>{selectedItem.topic}</Text>
+				<>
+					{/* Phase 2.9.5 Step 3: Keep deletion review focused after record selection. */}
+					<Text style={styles.selectedSummary}>{selectedOptionLabel}</Text>
+					<Pressable style={styles.changeSelectionBtn} onPress={clearSelection}>
+						<Text style={styles.changeSelectionText}>{'<- Back'}</Text>
+					</Pressable>
 
-					<Text style={styles.previewLabel}>Illustration</Text>
-					<Text style={styles.previewValue}>{selectedItem.illus}</Text>
+					<View style={styles.previewCard}>
+						<Text style={styles.previewTopic}>{selectedItem.topic}</Text>
 
-					<Text style={styles.previewLabel}>Application</Text>
-					<Text style={styles.previewValue}>{selectedItem.application}</Text>
+						<Text style={styles.previewLabel}>Illustration</Text>
+						<Text style={styles.previewValue}>{selectedItem.illus}</Text>
 
-					<Text style={styles.previewLabel}>Source</Text>
-					<Text style={styles.previewValue}>{selectedItem.sourceLink}</Text>
-				</View>
+						<Text style={styles.previewLabel}>Application</Text>
+						<Text style={styles.previewValue}>{selectedItem.application}</Text>
+
+						<Text style={styles.previewLabel}>Source</Text>
+						<Text style={styles.previewValue}>{selectedItem.sourceLink}</Text>
+					</View>
+				</>
 			) : (
 				<Text style={styles.empty}>Select an item to preview.</Text>
 			)}
@@ -379,6 +415,22 @@ const styles = StyleSheet.create({
 	comboContainer: {
 		marginBottom: 10,
 		zIndex: 20,
+	},
+	selectedSummary: {
+		fontSize: 13,
+		color: '#374151',
+		marginBottom: 8,
+	},
+	changeSelectionBtn: {
+		alignSelf: 'flex-start',
+		paddingVertical: 4,
+		paddingHorizontal: 0,
+		marginBottom: 8,
+	},
+	changeSelectionText: {
+		fontSize: 13,
+		fontWeight: '700',
+		color: '#2563eb',
 	},
 	previewCard: {
 		backgroundColor: '#ffffff',
