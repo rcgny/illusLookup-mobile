@@ -3,7 +3,11 @@ import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as SQLite from 'expo-sqlite';
 import { DB_NAME, getDb, initializeDatabase } from '../db/database';
-import { Illustration } from '../types/illustration';
+import {
+	Illustration,
+	TOPIC_BUNDLE_SCHEMA_VERSION,
+	TopicBundle,
+} from '../types/illustration';
 
 type AppMetaRow = {
 	key: string;
@@ -494,6 +498,78 @@ export async function exportSQLiteJsonDump(): Promise<ExportResult> {
 
 	exportFile.create({ intermediates: true, overwrite: true });
 	exportFile.write(`${JSON.stringify(payload, null, 2)}\n`);
+
+	return {
+		fileName: exportFile.name,
+		fileUri: exportFile.uri,
+		shared: await shareExport(exportFile, 'application/json'),
+	};
+}
+
+/**
+ * Phase 2.9.6 Step 4: Exports one topic and a chosen subset of its illustrations.
+ *
+ * @param {string} topic Topic to export, matched case-insensitively.
+ * @param {number[]} selectedIds Illustration ids to include.
+ * @returns {Promise<ExportResult>} Metadata about the exported bundle file.
+ */
+export async function exportTopicBundle(
+	topic: string,
+	selectedIds: number[],
+): Promise<ExportResult> {
+	const trimmedTopic = topic.trim();
+
+	if (!trimmedTopic) {
+		throw new Error('Select a topic to export.');
+	}
+
+	if (selectedIds.length === 0) {
+		throw new Error('Select at least one illustration to export.');
+	}
+
+	await initializeDatabase();
+	const db = await getDb();
+
+	const placeholders = selectedIds.map(() => '?').join(', ');
+	const rows = await db.getAllAsync<Illustration>(
+		`SELECT id, topic, illus, application, sourceLink, createdAt, updatedAt
+		 FROM illustrations
+		 WHERE id IN (${placeholders})
+		   AND LOWER(TRIM(topic)) = LOWER(TRIM(?))
+		 ORDER BY id ASC`,
+		[...selectedIds, trimmedTopic],
+	);
+
+	if (rows.length === 0) {
+		throw new Error('The selected illustrations are no longer available.');
+	}
+
+	const bundle: TopicBundle = {
+		schemaVersion: TOPIC_BUNDLE_SCHEMA_VERSION,
+		exportedAt: new Date().toISOString(),
+		topic: rows[0].topic,
+		illustrations: rows.map((row) => ({
+			illus: row.illus,
+			application: row.application,
+			sourceLink: row.sourceLink,
+			createdAt: row.createdAt,
+			updatedAt: row.updatedAt,
+		})),
+	};
+
+	const topicSlug =
+		trimmedTopic
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-+|-+$/g, '')
+			.slice(0, 40) || 'topic';
+	const exportFile = new File(
+		getExportsDirectory(),
+		`illuslookup-topic-${topicSlug}-${createExportStamp()}.json`,
+	);
+
+	exportFile.create({ intermediates: true, overwrite: true });
+	exportFile.write(`${JSON.stringify(bundle, null, 2)}\n`);
 
 	return {
 		fileName: exportFile.name,

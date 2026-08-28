@@ -40,3 +40,31 @@ export interface UpdateIllustrationInput {
 	application: string;
 	sourceLink: string;
 }
+
+/**
+ * One illustration inside a topic bundle.
+ *
+ * Row ids are intentionally omitted so imported rows get fresh local ids.
+ */
+export interface TopicBundleEntry {
+	illus: string;
+	application: string;
+	sourceLink: string;
+	createdAt: string;
+	updatedAt: string;
+}
+
+/**
+ * Phase 2.9.6: Transfer format for one topic and a subset of its illustrations.
+ *
+ * Unlike the full `.db` backup, a bundle is additive: importing it adds rows
+ * to the local database instead of replacing it.
+ */
+export interface TopicBundle {
+	schemaVersion: 1;
+	exportedAt: string;
+	topic: string;
+	illustrations: TopicBundleEntry[];
+}
+
+export const TOPIC_BUNDLE_SCHEMA_VERSION = 1;

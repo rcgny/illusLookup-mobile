@@ -18,9 +18,10 @@ import {
 	exportSafetyTempBackupToDownloads,
 	exportSQLiteDatabaseBackup,
 	exportSQLiteJsonDump,
+	exportTopicBundle,
 	previewSQLiteDatabaseImport,
 } from '../services/databaseExport';
-import { listIllustrations } from '../services/illustrationsRepo';
+import { listIllustrations, listTopics } from '../services/illustrationsRepo';
 import { Illustration } from '../types/illustration';
 
 type ImportSummaryDecision =
@@ -55,7 +56,9 @@ export default function IndexScreen() {
 	const [comboOpen, setComboOpen] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [exporting, setExporting] = useState<'db' | 'json' | null>(null);
+	const [exporting, setExporting] = useState<'db' | 'json' | 'topic' | null>(
+		null,
+	);
 	const [importing, setImporting] = useState(false);
 	const [exportError, setExportError] = useState<string | null>(null);
 	const [importError, setImportError] = useState<string | null>(null);
@@ -65,6 +68,15 @@ export default function IndexScreen() {
 	const importSummaryResolverRef = useRef<
 		((decision: ImportSummaryDecision) => void) | null
 	>(null);
+	const [topicExportStep, setTopicExportStep] = useState<
+		'topic' | 'illustrations' | null
+	>(null);
+	const [topicExportTopics, setTopicExportTopics] = useState<string[]>([]);
+	const [topicExportTopic, setTopicExportTopic] = useState('');
+	const [topicExportItems, setTopicExportItems] = useState<Illustration[]>([]);
+	const [topicExportSelectedIds, setTopicExportSelectedIds] = useState<
+		number[]
+	>([]);
 	const SEARCH_IDLE_MS = 700;
 
 	// SECTION 2: Data loading
@@ -274,6 +286,90 @@ export default function IndexScreen() {
 		]);
 	}, [clearTransferErrors, exporting, importing, runExport]);
 
+	// Phase 2.9.6 Step 10: Topic export runs topic pick -> illustration pick -> share.
+	const closeTopicExport = useCallback(() => {
+		setTopicExportStep(null);
+		setTopicExportTopic('');
+		setTopicExportItems([]);
+		setTopicExportSelectedIds([]);
+	}, []);
+
+	const openTopicExport = useCallback(async () => {
+		if (exporting || importing) {
+			return;
+		}
+
+		clearTransferErrors();
+
+		try {
+			const topics = await listTopics();
+
+			if (topics.length === 0) {
+				Alert.alert('Export Topic', 'There are no topics to export yet.');
+				return;
+			}
+
+			setTopicExportTopics(topics);
+			setTopicExportStep('topic');
+		} catch {
+			setExportError('Failed to load topics for export.');
+		}
+	}, [clearTransferErrors, exporting, importing]);
+
+	const selectTopicToExport = useCallback(async (topic: string) => {
+		try {
+			const rows = await listIllustrations({ topic });
+
+			if (rows.length === 0) {
+				Alert.alert('Export Topic', 'This topic has no illustrations.');
+				return;
+			}
+
+			setTopicExportTopic(topic);
+			setTopicExportItems(rows);
+			setTopicExportSelectedIds(rows.map((row) => row.id));
+			setTopicExportStep('illustrations');
+		} catch {
+			setExportError('Failed to load illustrations for this topic.');
+		}
+	}, []);
+
+	const toggleTopicExportSelection = useCallback((id: number) => {
+		setTopicExportSelectedIds((selected) =>
+			selected.includes(id)
+				? selected.filter((selectedId) => selectedId !== id)
+				: [...selected, id],
+		);
+	}, []);
+
+	const runTopicExport = useCallback(async () => {
+		const topic = topicExportTopic;
+		const selectedIds = topicExportSelectedIds;
+
+		closeTopicExport();
+
+		try {
+			setExporting('topic');
+			setExportError(null);
+
+			const result = await exportTopicBundle(topic, selectedIds);
+			const message = result.shared
+				? `${result.fileName} was saved and the share sheet opened.`
+				: `${result.fileName} was saved in the app documents export folder.`;
+
+			Alert.alert('Topic Export Complete', message);
+		} catch (exportIssue) {
+			const message =
+				exportIssue instanceof Error
+					? exportIssue.message
+					: 'Failed to export topic bundle.';
+			setExportError(message);
+			Alert.alert('Topic Export Failed', message);
+		} finally {
+			setExporting(null);
+		}
+	}, [closeTopicExport, topicExportSelectedIds, topicExportTopic]);
+
 	const runImport = useCallback(async () => {
 		let previewTokenToCleanup: string | null = null;
 		try {
@@ -397,6 +493,12 @@ export default function IndexScreen() {
 		openExportChooser();
 	}, [clearTransferErrors, openExportChooser]);
 
+	const onShareExportTopicPress = useCallback(() => {
+		clearTransferErrors();
+		setShareMenuOpen(false);
+		void openTopicExport();
+	}, [clearTransferErrors, openTopicExport]);
+
 	// Phase 2.6.1 Step 2: Open fullscreen read-only illustration card.
 	const openReadOnlyCard = useCallback(
 		(id: number) => {
@@ -414,6 +516,13 @@ export default function IndexScreen() {
 				<Pressable
 					style={styles.importSummaryBackdrop}
 					onPress={() => resolveImportSummaryDecision('cancel')}
+				/>
+			)}
+
+			{topicExportStep && (
+				<Pressable
+					style={styles.importSummaryBackdrop}
+					onPress={closeTopicExport}
 				/>
 			)}
 
@@ -541,6 +650,12 @@ export default function IndexScreen() {
 					<Pressable style={styles.shareMenuItem} onPress={onShareExportPress}>
 						<Text style={styles.shareMenuItemText}>Export Data</Text>
 					</Pressable>
+					<Pressable
+						style={styles.shareMenuItem}
+						onPress={onShareExportTopicPress}
+					>
+						<Text style={styles.shareMenuItemText}>Export Topic</Text>
+					</Pressable>
 					<Pressable style={styles.shareMenuItem} onPress={closeShareDataMenu}>
 						<Text style={styles.shareMenuItemText}>Cancel</Text>
 					</Pressable>
@@ -618,6 +733,97 @@ export default function IndexScreen() {
 					</View>
 				</View>
 			)}
+			{topicExportStep === 'topic' && (
+				<View style={styles.importSummaryPanel}>
+					<Text style={styles.importSummaryTitle}>Export Topic</Text>
+					<Text style={styles.importSummaryLine}>
+						Choose the topic you want to share.
+					</Text>
+					<FlatList
+						data={topicExportTopics}
+						keyExtractor={(topic) => topic}
+						style={styles.topicExportList}
+						renderItem={({ item }) => (
+							<Pressable
+								style={styles.topicExportRow}
+								onPress={() => {
+									void selectTopicToExport(item);
+								}}
+							>
+								<Text style={styles.topicExportRowText}>{item}</Text>
+							</Pressable>
+						)}
+					/>
+					<View style={styles.importSummaryActions}>
+						<Pressable
+							style={[
+								styles.importSummaryActionBtn,
+								styles.importSummaryCancelBtn,
+							]}
+							onPress={closeTopicExport}
+						>
+							<Text style={styles.importSummaryActionText}>Cancel</Text>
+						</Pressable>
+					</View>
+				</View>
+			)}
+
+			{topicExportStep === 'illustrations' && (
+				<View style={styles.importSummaryPanel}>
+					<Text style={styles.importSummaryTitle}>{topicExportTopic}</Text>
+					<Text style={styles.importSummaryLine}>
+						{`Selected ${topicExportSelectedIds.length} of ${topicExportItems.length} illustrations.`}
+					</Text>
+					<FlatList
+						data={topicExportItems}
+						keyExtractor={(item) => String(item.id)}
+						style={styles.topicExportList}
+						renderItem={({ item }) => {
+							const isSelected = topicExportSelectedIds.includes(item.id);
+							return (
+								<Pressable
+									style={styles.topicExportRow}
+									onPress={() => toggleTopicExportSelection(item.id)}
+								>
+									<Text style={styles.topicExportCheckbox}>
+										{isSelected ? '[x]' : '[ ]'}
+									</Text>
+									<Text style={styles.topicExportRowText} numberOfLines={2}>
+										{item.illus}
+									</Text>
+								</Pressable>
+							);
+						}}
+					/>
+					<View style={styles.importSummaryActions}>
+						<Pressable
+							style={[
+								styles.importSummaryActionBtn,
+								styles.importSummaryCancelBtn,
+							]}
+							onPress={closeTopicExport}
+						>
+							<Text style={styles.importSummaryActionText}>Cancel</Text>
+						</Pressable>
+						<Pressable
+							style={[
+								styles.importSummaryActionBtn,
+								topicExportSelectedIds.length === 0 &&
+									styles.importSummaryActionBtnDisabled,
+							]}
+							onPress={() => {
+								void runTopicExport();
+							}}
+							disabled={topicExportSelectedIds.length === 0}
+						>
+							<Text style={styles.importSummaryActionText}>
+								Export Selected
+							</Text>
+						</Pressable>
+					</View>
+				</View>
+			)}
+
 			{exportError && <Text style={styles.exportError}>{exportError}</Text>}
 			{importError && <Text style={styles.importError}>{importError}</Text>}
 
@@ -807,6 +1013,31 @@ const styles = StyleSheet.create({
 	},
 	importSummaryCancelBtn: {
 		backgroundColor: '#64748b',
+	},
+	importSummaryActionBtnDisabled: {
+		opacity: 0.55,
+	},
+	topicExportList: {
+		marginTop: 10,
+		maxHeight: 260,
+	},
+	topicExportRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+		paddingVertical: 10,
+		borderBottomWidth: 1,
+		borderBottomColor: '#e5e7eb',
+	},
+	topicExportCheckbox: {
+		fontSize: 14,
+		fontWeight: '700',
+		color: '#2563eb',
+	},
+	topicExportRowText: {
+		flex: 1,
+		fontSize: 14,
+		color: '#1f2937',
 	},
 	importSummaryActionText: {
 		color: '#ffffff',

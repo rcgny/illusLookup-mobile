@@ -85,6 +85,30 @@ export async function listIllustrations(
 }
 
 /**
+ * Phase 2.9.6 Step 3: Returns distinct topics for topic-scoped export.
+ *
+ * @returns {Promise<string[]>} Display-cased topics, one per normalized topic.
+ */
+export async function listTopics(): Promise<string[]> {
+	await initializeDatabase();
+	const db = await getDb();
+
+	// MIN(id) keeps the earliest row's casing as the display form for each topic.
+	const rows = await db.getAllAsync<{ topic: string }>(
+		`SELECT topic
+		 FROM illustrations
+		 WHERE id IN (
+			SELECT MIN(id) FROM illustrations
+			WHERE LENGTH(TRIM(topic)) > 0
+			GROUP BY LOWER(TRIM(topic))
+		 )
+		 ORDER BY topic COLLATE NOCASE ASC`,
+	);
+
+	return rows.map((row) => row.topic);
+}
+
+/**
  * Returns one illustration by id.
  *
  * Phase 2.6.1 Step 1:
