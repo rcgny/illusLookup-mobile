@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import {
 	BackHandler,
 	Keyboard,
@@ -57,8 +57,6 @@ export function TopicComboBox({
 	hintMessage,
 	containerStyle,
 }: TopicComboBoxProps) {
-	const comboInputRef = useRef<TextInput | null>(null);
-
 	// Phase 2.7 Step 6: Do not auto-focus on open to avoid Android soft-keyboard popups.
 	// Users can still tap into the input directly when they want to type.
 
@@ -88,7 +86,6 @@ export function TopicComboBox({
 			)}
 			<View style={styles.comboInput}>
 				<TextInput
-					ref={comboInputRef}
 					value={value}
 					onChangeText={onChangeText}
 					placeholder={placeholder}

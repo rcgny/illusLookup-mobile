@@ -124,6 +124,12 @@ Expected result: Detail, edit, and delete all work normally on Samsung.
    - In Expo dev tools, switch connection mode from LAN to Tunnel.
 3. Runtime red screen appears:
    - Check Metro logs for the first error line and fix that error before retrying.
+4. Phone reports HTTP 500 and Metro cannot resolve `react-native/asset-registry`:
+   - This is a bundling failure, not a Wi-Fi connection failure.
+   - Keep Expo, React Native, React, and Expo modules on compatible SDK versions. This project targets Expo SDK 58.
+   - Run `npx expo install --check` to detect mismatches. After an SDK upgrade, run `npx expo install --fix` to align dependencies.
+   - Stop the existing Metro process, then run `npx expo start --clear` and scan the new QR code.
+   - Use an Expo Go version that supports the project's SDK.
 
 ### Phase 2.8 Completion Criteria
 

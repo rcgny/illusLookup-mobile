@@ -193,8 +193,11 @@ export async function previewSQLiteDatabaseImport(): Promise<ImportPreviewResult
 	const stagedPreviewDbName = `illuslookup-preview-${createExportStamp()}.db`;
 
 	try {
-		// Phase 2.9.4 Step 1: reuse the stable picker call form used by import.
-		selectedFile = await File.pickFileAsync(undefined, '*/*');
+		const pickedFile = await File.pickFileAsync({ mimeTypes: '*/*' });
+		if (pickedFile.canceled) {
+			return null;
+		}
+		selectedFile = pickedFile.result;
 	} catch (pickIssue) {
 		const pickMessage =
 			pickIssue instanceof Error ? pickIssue.message.toLowerCase() : '';
@@ -316,7 +319,6 @@ export async function commitPreviewedSQLiteDatabaseImport(
 
 	const stagedRollbackDbName = `illuslookup-preimport-${createExportStamp()}.db`;
 	let sourceDb: SQLite.SQLiteDatabase | null = null;
-	let rollbackSourceDb: SQLite.SQLiteDatabase | null = null;
 	let destinationDb: SQLite.SQLiteDatabase | null = null;
 	const sqliteDirectory = new Directory(stagedPreview.sqliteDirectoryUri);
 	let hasDestinationSnapshot = false;
@@ -326,23 +328,27 @@ export async function commitPreviewedSQLiteDatabaseImport(
 			return false;
 		}
 
-		rollbackSourceDb = await SQLite.openDatabaseAsync(stagedRollbackDbName, {
+		const rollbackSourceDb = await SQLite.openDatabaseAsync(stagedRollbackDbName, {
 			useNewConnection: true,
 		});
 
-		if (!destinationDb) {
-			await initializeDatabase();
-			destinationDb = await getDb();
+		try {
+			if (!destinationDb) {
+				await initializeDatabase();
+				destinationDb = await getDb();
+			}
+
+			await SQLite.backupDatabaseAsync({
+				sourceDatabase: rollbackSourceDb,
+				sourceDatabaseName: 'main',
+				destDatabase: destinationDb,
+				destDatabaseName: 'main',
+			});
+
+			return true;
+		} finally {
+			await rollbackSourceDb.closeAsync();
 		}
-
-		await SQLite.backupDatabaseAsync({
-			sourceDatabase: rollbackSourceDb,
-			sourceDatabaseName: 'main',
-			destDatabase: destinationDb,
-			destDatabaseName: 'main',
-		});
-
-		return true;
 	};
 
 	try {
@@ -421,9 +427,6 @@ export async function commitPreviewedSQLiteDatabaseImport(
 			`${baseMessage} Import rollback could not be confirmed; please restore from your latest exported backup.`,
 		);
 	} finally {
-		if (rollbackSourceDb) {
-			await rollbackSourceDb.closeAsync();
-		}
 		if (sourceDb) {
 			await sourceDb.closeAsync();
 		}

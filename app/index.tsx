@@ -870,12 +870,12 @@ const styles = StyleSheet.create({
 		backgroundColor: '#f6f7f9',
 	},
 	importSummaryBackdrop: {
-		...StyleSheet.absoluteFillObject,
+		...StyleSheet.absoluteFill,
 		zIndex: 35,
 		backgroundColor: 'rgba(15, 23, 42, 0.25)',
 	},
 	shareMenuBackdrop: {
-		...StyleSheet.absoluteFillObject,
+		...StyleSheet.absoluteFill,
 		zIndex: 25,
 	},
 	title: {
