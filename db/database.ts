@@ -121,10 +121,15 @@ async function seedOncePerDatabaseLifecycle(): Promise<void> {
 		(topic, illus, application, sourceLink, createdAt, updatedAt)
 		VALUES (?, ?, ?, ?, ?, ?)`,
 		[
-			'Grace Under Pressure',
-			'Calm, controlled response under stress.',
-			'Team lead de-escalates a production incident.',
-			'Seed data',
+			'Comparing',
+			'If we fill 3 glasses with water all at different levels and view them straight on\n' +
+			'we might compare ourselves to one of the glasses maybe the one that has the lowest level...' +
+			'and think the other glasses are more valuable since they are higher level.\n' + 
+			'But its just a viewpoint issue.' + 
+			'However if viewed from top of the glasses, theay appear filled to the same height.',
+			'Jehovah views from above, sees us all at the same level.' +
+			'Jehovah views us equally as we do what we can.',
+			'Morning worship',
 			now,
 			now,
 		],
@@ -135,10 +140,70 @@ async function seedOncePerDatabaseLifecycle(): Promise<void> {
 		(topic, illus, application, sourceLink, createdAt, updatedAt)
 		VALUES (?, ?, ?, ?, ?, ?)`,
 		[
-			'Incremental Learning',
-			'Small improvements compound over time.',
-			'Daily coding practice with reflection notes.',
-			'Seed data',
+			'Confidence',
+			'Jehovah is like a grand chessmaster, no matter what moves Jehovah\'s opponent the Devil has\n' +
+			'Jehovah has countless superior moves and can change world events in a heartbeat.',
+			'For Example before  Britain was a world power, there were more powerful nations like the Netherlands\n' +
+			'Spain and France, but Britain defeated all these 3 nations. \n' +
+			'This victory was prophesied, in the Bible, at Daniel 7:8,24. \n' + 
+			'So we can have confidence in Jehovah\'s future chess moves as He destroys this old system to His praise.',
+			'Morning worship 9/6/22',
+			now,
+			now,
+		],
+	);
+
+	await db.runAsync(
+		`INSERT INTO illustrations
+		(topic, illus, application, sourceLink, createdAt, updatedAt)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		[
+			'Resurrection',
+			'Leonardo DaVinci started the Mona Lisa in 1503... but not finished by 1517\n' +
+			'so for 14 yrs...technically unfinished, but he did complete it \n' +
+			'and it is the highest valued painting in the world',
+			'We are each like a painting, each one unique, \n' +
+			'and when we die we are like that unfinished Mona Lisa painting. \n' + 
+			'but Jehovah the greatest artist will not leave it unfinished. Think of it, we are more valuable to jehovah then the Mona Lisa' + 
+			'He will finish our portrait when we are resurrected.',
+			'A Memorial talk',
+			now,
+			now,
+		],
+	);
+
+	await db.runAsync(
+		`INSERT INTO illustrations
+		(topic, illus, application, sourceLink, createdAt, updatedAt)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		[
+			'Meditation',
+			'If you write something in the sand near the ocean\'s edge,\n' +
+			'the waves will soon wash it away.\n' +
+			'Or if you write a message in the condensation of a bathroom mirror, it will soon disappear as well.',
+			'Quickly reading the Bible, without meditating on it, is like writing in the sand or on a foggy mirror.\n' +
+			'By contrast, taking time to meditate, is like carving that message in stone.\n' +
+			'This illustrates the importance of meditation and reflection on spiritual matters, which have lasting value.',
+			'MW 01-22-24, PS 119:103',
+			now,
+			now,
+		],
+	);
+
+	await db.runAsync(
+		`INSERT INTO illustrations
+		(topic, illus, application, sourceLink, createdAt, updatedAt)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		[
+			'Unity',
+			'When rowing teams are racing, their best chance of winning is related to achieving the "swing".\n' +
+			'The swing is a hard-to-define feeling when near-perfect synchronization of motion\n' +
+		    'occurs in the shell,or racing boat enhancing the performance and speed.\n' +
+			'It only happens when all eight oarsmen are rowing in  perfect unison.\n' +
+			'Only then will the shell glide unchecked across the water, fluidly and gracefully carrying its momentum\n' + 			
+			'between each pull of the oars.\n',
+			'We can achieve \"spiritual swing\" by:  Thinking in agreement, Having unity, and remembering who\'s  in charge: the Christ',
+			'Talk:  "The Spiritual Swing"',
 			now,
 			now,
 		],
