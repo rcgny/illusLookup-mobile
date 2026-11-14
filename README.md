@@ -231,7 +231,7 @@ Support info to collect for bug reports: device model, Android version, exact fi
 
 ## Phase 3.0 Plan: Standalone Android Beta
 
-Status: Phase 3.0.1 in progress; later steps are planned. Complete and verify each step below in order before moving to the next.
+Status: Phase 3.0.1 complete; later steps are planned. Complete and verify each step below in order before moving to the next.
 
 Goal: Install Illus Mobile as its own Android app, migrate existing data safely, and share it with a small test group. The installed app must work with the laptop turned off, without Expo Go or a running Expo/Metro server.
 
@@ -245,48 +245,17 @@ This phase keeps Expo and the existing local SQLite architecture; no app rewrite
   - EAS Build is the standard Expo cloud-build route and uploads project source to Expo's build service; confirm that this is acceptable before using it.
   - Local Android Studio/Gradle builds are an alternative if source must remain local, with additional tooling/setup.
 - [x] Add an `eas.json` `preview` profile for a release-mode, internally distributed APK, not a development client.
-- [ ] Log in to EAS and link the Expo project.
+- [x] Log in to EAS and link the Expo project under the `rcgny-expo` account.
 - [x] Configure remote version-code management with automatic increments for preview builds; the local initial Android version code is `1`.
-- [ ] Establish release signing so future builds can update the same installed app. Preserve signing credentials securely outside source control.
+- [x] Generate an Android release keystore managed remotely by EAS. Preserve signing credentials securely outside source control.
 
 Completion criteria: App identity and build route are agreed, and configuration is ready to produce a signed standalone APK.
 
-#### Phase 3.0.1 Setup and Remaining Actions
+#### Phase 3.0.1 Completion Notes
 
-Local configuration is in [app.json](./app.json) and [eas.json](./eas.json). The Expo slug and URL scheme are unchanged; only the phone's display name has changed.
+Local configuration is in [app.json](./app.json) and [eas.json](./eas.json). The EAS project is linked to the `rcgny-expo` account, Android release signing is configured with an EAS-managed keystore, and the `preview` profile resolves to an internally distributed standalone APK. The Expo slug and URL scheme are unchanged; only the phone's display name has changed.
 
-EAS login was checked during setup and no account was signed in. Run these commands in a terminal at the project root, completing the interactive prompts locally. Do not paste passwords, access tokens, or signing credentials into chat.
-
-1. Sign in to your Expo account (create one at [expo.dev](https://expo.dev/signup) first if needed):
-
-   ```powershell
-   npx eas-cli@latest login
-   npx eas-cli@latest whoami
-   ```
-
-2. Link this repository to the intended Expo account/project:
-
-   ```powershell
-   npx eas-cli@latest init
-   ```
-
-   Confirm the intended project rather than linking an unrelated existing app. This records the assigned EAS project ID in the app configuration; do not invent a project ID.
-
-3. Configure Android signing without starting a build:
-
-   ```powershell
-   npx eas-cli@latest credentials --platform android
-   ```
-
-   Select the `preview` profile and set up an Android keystore. Reuse an existing keystore if this application ID has already been distributed; otherwise generate one through the credential manager. EAS is configured to manage signing credentials remotely. Retain a secure backup of the keystore and its passwords outside the repository. Local `credentials.json`, `.jks`, and `.keystore` files are ignored by Git.
-
-4. Verify the linked build configuration:
-
-   ```powershell
-   npx eas-cli@latest config --platform android --profile preview
-   ```
-
-   Confirm the application ID, release-mode APK profile, project link, and signing setup before marking Phase 3.0.1 complete. No APK build is started in this step.
+The EAS configuration command resolved the expected Android application ID and `preview` APK profile. Its notice that no preview environment variables are configured is informational; this app does not currently require any.
 
 Versioning: `expo.version` remains the manually managed user-facing version. EAS manages and increments Android build version codes remotely; the local `android.versionCode` is only the initial baseline, not the authoritative value after remote versioning is initialized. Keep the application ID and signing key stable for in-place updates that preserve local app data.
 
