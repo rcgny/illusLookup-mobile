@@ -1,56 +1,65 @@
 {
-	"expo": {
-		"name": "Illustration Repo",
-		"slug": "illusLookup-mobile",
-		"version": "1.0.0",
-		"orientation": "portrait",
-		"icon": "./assets/images/icon.png",
-		"scheme": "illuslookupmobile",
-		"userInterfaceStyle": "automatic",
-		//	"newArchEnabled": true,
-		"ios": {
-			"supportsTablet": true
-		},
-		"android": {
-			"package": "com.rcgny.illuslookup",
-			"versionCode": 1,
-			"adaptiveIcon": {
-				"backgroundColor": "#E6F4FE",
-				"foregroundImage": "./assets/images/android-icon-foreground.png",
-				"backgroundImage": "./assets/images/android-icon-background.png",
-				"monochromeImage": "./assets/images/android-icon-monochrome.png"
-			},
-			// "edgeToEdgeEnabled": true,
-			"predictiveBackGestureEnabled": false
-		},
-		"web": {
-			"output": "static",
-			"favicon": "./assets/images/favicon.png"
-		},
-		"plugins": [
-			"expo-router",
-			[
-				"expo-splash-screen",
-				{
-					"image": "./assets/images/splash-icon.png",
-					"imageWidth": 200,
-					"resizeMode": "contain",
-					"backgroundColor": "#ffffff",
-					"dark": {
-						"backgroundColor": "#000000"
-					}
-				}
-			],
-			"expo-sqlite",
-			"expo-web-browser",
-			"expo-font",
-			"expo-image",
-			"expo-sharing",
-			"expo-status-bar"
-		],
-		"experiments": {
-			"typedRoutes": true,
-			"reactCompiler": true
-		}
-	}
+  "expo": {
+    "name": "Illustration Repo",
+    "slug": "illusLookup-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "illuslookupmobile",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.rcgny.illuslookup",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "expo-sqlite",
+      "expo-web-browser",
+      "expo-font",
+      "expo-image",
+      "expo-sharing",
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "8a083839-3800-4c1d-9bec-03760b922200"
+      }
+    },
+    "owner": "rcgny-expo"
+  }
 }
