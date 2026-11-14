@@ -229,6 +229,122 @@ Support info to collect for bug reports: device model, Android version, exact fi
 - `app/edit.tsx`: Phase 2.3 edit UI and update flow.
 - `types/illustration.ts`: Shared record and input payload types.
 
+## Phase 3.0 Plan: Standalone Android Beta
+
+Status: Phase 3.0.1 in progress; later steps are planned. Complete and verify each step below in order before moving to the next.
+
+Goal: Install Illus Mobile as its own Android app, migrate existing data safely, and share it with a small test group. The installed app must work with the laptop turned off, without Expo Go or a running Expo/Metro server.
+
+This phase keeps Expo and the existing local SQLite architecture; no app rewrite is required. Google Play publishing, accounts/authentication, and cloud syncing are deferred to later phases.
+
+### Phase 3.0.1: Configure a Standalone Release
+
+- [x] Choose the permanent Android application ID (package name): `com.rcgny.illuslookup`.
+- [x] Confirm the app display name (`Illustration Repo`), existing launcher icons, and initial release version (`1.0.0`).
+- [x] Choose the build route before configuring it: EAS cloud builds selected.
+  - EAS Build is the standard Expo cloud-build route and uploads project source to Expo's build service; confirm that this is acceptable before using it.
+  - Local Android Studio/Gradle builds are an alternative if source must remain local, with additional tooling/setup.
+- [x] Add an `eas.json` `preview` profile for a release-mode, internally distributed APK, not a development client.
+- [ ] Log in to EAS and link the Expo project.
+- [x] Configure remote version-code management with automatic increments for preview builds; the local initial Android version code is `1`.
+- [ ] Establish release signing so future builds can update the same installed app. Preserve signing credentials securely outside source control.
+
+Completion criteria: App identity and build route are agreed, and configuration is ready to produce a signed standalone APK.
+
+#### Phase 3.0.1 Setup and Remaining Actions
+
+Local configuration is in [app.json](./app.json) and [eas.json](./eas.json). The Expo slug and URL scheme are unchanged; only the phone's display name has changed.
+
+EAS login was checked during setup and no account was signed in. Run these commands in a terminal at the project root, completing the interactive prompts locally. Do not paste passwords, access tokens, or signing credentials into chat.
+
+1. Sign in to your Expo account (create one at [expo.dev](https://expo.dev/signup) first if needed):
+
+   ```powershell
+   npx eas-cli@latest login
+   npx eas-cli@latest whoami
+   ```
+
+2. Link this repository to the intended Expo account/project:
+
+   ```powershell
+   npx eas-cli@latest init
+   ```
+
+   Confirm the intended project rather than linking an unrelated existing app. This records the assigned EAS project ID in the app configuration; do not invent a project ID.
+
+3. Configure Android signing without starting a build:
+
+   ```powershell
+   npx eas-cli@latest credentials --platform android
+   ```
+
+   Select the `preview` profile and set up an Android keystore. Reuse an existing keystore if this application ID has already been distributed; otherwise generate one through the credential manager. EAS is configured to manage signing credentials remotely. Retain a secure backup of the keystore and its passwords outside the repository. Local `credentials.json`, `.jks`, and `.keystore` files are ignored by Git.
+
+4. Verify the linked build configuration:
+
+   ```powershell
+   npx eas-cli@latest config --platform android --profile preview
+   ```
+
+   Confirm the application ID, release-mode APK profile, project link, and signing setup before marking Phase 3.0.1 complete. No APK build is started in this step.
+
+Versioning: `expo.version` remains the manually managed user-facing version. EAS manages and increments Android build version codes remotely; the local `android.versionCode` is only the initial baseline, not the authoritative value after remote versioning is initialized. Keep the application ID and signing key stable for in-place updates that preserve local app data.
+
+### Phase 3.0.2: Produce and Install an APK
+
+- [ ] Run dependency compatibility checks, lint, and TypeScript checks; resolve release-blocking issues.
+- [ ] Build a signed release-mode APK with JavaScript and required assets bundled into the app.
+- [ ] Download or locate the APK and install it on the primary Android phone.
+- [ ] Confirm the app opens from its own launcher icon, without Expo Go or a development-server prompt.
+- [ ] Record the build command, app version, and installation procedure for repeatable builds.
+
+Build formats:
+
+| Build | Purpose |
+|---|---|
+| Expo Go / development client | Development workflow, normally connected to the laptop's Metro server |
+| Standalone release-mode APK | Direct installation and use without the laptop |
+| Android App Bundle (AAB) | Later distribution through Google Play; not directly installable like an APK |
+
+Completion criteria: The standalone APK installs and launches successfully on the primary phone.
+
+### Phase 3.0.3: Migrate Existing Data Safely
+
+Expo Go and the standalone app use separate private storage. Existing Expo Go data will not automatically appear in the standalone app.
+
+- [ ] Export a current SQLite `.db` backup from the existing app running in Expo Go.
+- [ ] Save the backup outside Expo Go's private storage, such as Downloads or another safe backup location.
+- [ ] Import the backup into the installed standalone app.
+- [ ] Verify the illustration count and known topics, illustration text, application text, and source links.
+- [ ] Keep Expo Go and the exported backup until migration has been verified.
+
+Completion criteria: Existing illustrations are available in the standalone app, with a retained external backup.
+
+### Phase 3.0.4: Verify Independence and Data Persistence
+
+- [ ] Stop the Expo/Metro server and turn off the laptop.
+- [ ] Enable airplane mode on the phone and launch the standalone app.
+- [ ] Test Home browsing, search/sort, and illustration detail viewing.
+- [ ] Test create, edit, and delete with disposable test records while offline.
+- [ ] Fully close and reopen the app, then restart the phone; verify saved data remains.
+- [ ] Test SQLite backup export and successful import using a backup accessible on the device.
+- [ ] Test invalid-file import and confirm existing data remains usable and unchanged.
+- [ ] Build and install a subsequent signed APK over the existing installation, without uninstalling; verify user data survives the update.
+
+Completion criteria: Core flows work without the laptop or network, data survives app/phone restarts, backup/import works, and an in-place app update preserves data.
+
+### Phase 3.0.5: Share with a Small Test Group
+
+- [ ] Prepare brief instructions for APK installation, Android's trusted-source installation permission, first launch, backup/import, and future updates.
+- [ ] Explain that each installation has its own local database, with no automatic syncing.
+- [ ] Explain that SQLite backup import replaces local data rather than merging changes; users should export a backup before importing.
+- [ ] Share the APK through a controlled channel with a small group of trusted Android testers.
+- [ ] Verify installation and offline use on at least one additional Android phone.
+- [ ] Collect device model, Android version, app version, reproduction steps, and exact error messages for reported problems.
+- [ ] Resolve beta-blocking issues before expanding distribution or planning Google Play publication.
+
+Completion criteria: The owner and at least one other tester can use the installed app with the laptop completely off, and testers understand local-only data, backups, and updates.
+
 ## Get started
 
 1. Install dependencies

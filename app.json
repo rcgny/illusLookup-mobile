@@ -1,6 +1,6 @@
 {
 	"expo": {
-		"name": "illusLookup-mobile",
+		"name": "Illustration Repo",
 		"slug": "illusLookup-mobile",
 		"version": "1.0.0",
 		"orientation": "portrait",
@@ -12,6 +12,8 @@
 			"supportsTablet": true
 		},
 		"android": {
+			"package": "com.rcgny.illuslookup",
+			"versionCode": 1,
 			"adaptiveIcon": {
 				"backgroundColor": "#E6F4FE",
 				"foregroundImage": "./assets/images/android-icon-foreground.png",
