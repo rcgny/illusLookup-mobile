@@ -231,7 +231,7 @@ Support info to collect for bug reports: device model, Android version, exact fi
 
 ## Phase 3.0 Plan: Standalone Android Beta
 
-Status: Phase 3.0.1 complete; later steps are planned. Complete and verify each step below in order before moving to the next.
+Status: Phases 3.0.1 and 3.0.2 complete; later steps are planned. Complete and verify each step below in order before moving to the next.
 
 Goal: Install Illus Mobile as its own Android app, migrate existing data safely, and share it with a small test group. The installed app must work with the laptop turned off, without Expo Go or a running Expo/Metro server.
 
@@ -261,11 +261,11 @@ Versioning: `expo.version` remains the manually managed user-facing version. EAS
 
 ### Phase 3.0.2: Produce and Install an APK
 
-- [ ] Run dependency compatibility checks, lint, and TypeScript checks; resolve release-blocking issues.
-- [ ] Build a signed release-mode APK with JavaScript and required assets bundled into the app.
-- [ ] Download or locate the APK and install it on the primary Android phone.
-- [ ] Confirm the app opens from its own launcher icon, without Expo Go or a development-server prompt.
-- [ ] Record the build command, app version, and installation procedure for repeatable builds.
+- [x] Run dependency compatibility checks, lint, and TypeScript checks; resolve release-blocking issues.
+- [x] Build a signed release-mode APK with JavaScript and required assets bundled into the app.
+- [x] Download or locate the APK and install it on the primary Android phone.
+- [x] Confirm the app opens from its own launcher icon, without Expo Go or a development-server prompt.
+- [x] Record the build command, app version, and installation procedure for repeatable builds.
 
 Build formats:
 
@@ -276,6 +276,8 @@ Build formats:
 | Android App Bundle (AAB) | Later distribution through Google Play; not directly installable like an APK |
 
 Completion criteria: The standalone APK installs and launches successfully on the primary phone.
+
+Completion note: The user confirmed the APK is installed and the standalone app launches on the phone without Expo Go or the Expo development server.
 
 ### Phase 3.0.3: Migrate Existing Data Safely
 
