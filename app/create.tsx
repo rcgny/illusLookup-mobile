@@ -54,11 +54,6 @@ export default function CreateScreen() {
 		return existingTopics.filter((topic) => topic.toLowerCase().includes(q));
 	}, [existingTopics, form.topic]);
 
-	const displayedTopics = useMemo(() => {
-		if (!form.topic.trim()) return filteredTopics.slice(0, 6);
-		return filteredTopics;
-	}, [filteredTopics, form.topic]);
-
 	// SECTION 2: Form validation helpers
 	const fieldErrors = useMemo(() => {
 		return {
@@ -184,7 +179,7 @@ export default function CreateScreen() {
 					onToggle={toggleCombo}
 					onRequestClose={closeCombo}
 					onToggleFromZone={toggleComboFromZone}
-					options={displayedTopics}
+					options={filteredTopics}
 					onSelectOption={selectExistingTopic}
 					showClear={Boolean(form.topic)}
 					onClear={clearTopicSelection}
@@ -192,7 +187,7 @@ export default function CreateScreen() {
 					emptyMessage="No matching topics."
 					hintMessage={
 						!form.topic.trim() && existingTopics.length > 6
-							? 'Type to search more topics or enter a new one.'
+							? 'Scroll or type to search topics, or enter a new one.'
 							: undefined
 					}
 					containerStyle={styles.comboContainer}

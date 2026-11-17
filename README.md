@@ -231,7 +231,7 @@ Support info to collect for bug reports: device model, Android version, exact fi
 
 ## Phase 3.0 Plan: Standalone Android Beta
 
-Status: Phases 3.0.1 and 3.0.2 complete; later steps are planned. Complete and verify each step below in order before moving to the next.
+Status: Phases 3.0.1 and 3.0.2 complete; Phase 3.0.3 is in progress. Complete and verify each step below in order before moving to the next.
 
 Goal: Install Illus Mobile as its own Android app, migrate existing data safely, and share it with a small test group. The installed app must work with the laptop turned off, without Expo Go or a running Expo/Metro server.
 
@@ -281,15 +281,35 @@ Completion note: The user confirmed the APK is installed and the standalone app 
 
 ### Phase 3.0.3: Migrate Existing Data Safely
 
-Expo Go and the standalone app use separate private storage. Existing Expo Go data will not automatically appear in the standalone app.
+Fresh installations seed five starter illustrations once per database lifecycle. The MongoDB migration is a one-time **local script**, not an in-app JSON import. It merges the MongoDB export into a new copy of the phone's SQLite backup; the app's `Import Data` then restores that complete copy, replacing the phone's current database.
 
-- [ ] Export a current SQLite `.db` backup from the existing app running in Expo Go.
-- [ ] Save the backup outside Expo Go's private storage, such as Downloads or another safe backup location.
-- [ ] Import the backup into the installed standalone app.
-- [ ] Verify the illustration count and known topics, illustration text, application text, and source links.
-- [ ] Keep Expo Go and the exported backup until migration has been verified.
+- [ ] Export the standalone phone app's SQLite `.db` backup and save a separate copy outside the app.
+- [ ] Copy that `.db` backup and the MongoDB JSON export to a private folder on the computer.
+- [ ] Run the local merge script to produce a new `.db` file; review the counts.
+- [ ] Transfer the merged `.db` to the phone and restore it using `Share data` -> `Import Data`.
+- [ ] Verify the five starter illustrations remain, the total count is correct, and several imported records are intact.
+- [ ] Retain the original phone backup and MongoDB JSON export until migration has been verified.
 
-Completion criteria: Existing illustrations are available in the standalone app, with a retained external backup.
+#### Merge Instructions
+
+The script requires Python 3 and uses its built-in SQLite support. From the project root, substitute actual paths for the examples below; the output must not already exist. Keep all backup and export files in a private location outside the repository.
+
+```powershell
+python .\scripts\merge_mongodb_export.py `
+  --backup "$HOME\Documents\IllustrationMigration\phone-backup.db" `
+  --json "$HOME\Documents\IllustrationMigration\mongo-export.json" `
+  --output "$HOME\Documents\IllustrationMigration\merged.db"
+```
+
+The script reads a MongoDB JSON **array** with non-empty string `Topic`, `Illus`, `Application`, and `SourceLink` fields. It validates the complete file, ignores MongoDB `_id`, and assigns the import time to new rows. It copies the original backup, preserves existing rows and metadata, and skips duplicates whose four fields match after trimming whitespace (case-sensitive). Different illustrations under the same topic are retained. The source files are never overwritten.
+
+The script requires the phone backup's seed and duplicate-cleanup initialization markers to be complete; otherwise a later app startup could remove same-topic rows. If either marker is missing, open the original app and export a new backup. A failed merge removes its newly created output and leaves the inputs untouched.
+
+**Important:** Before restoring, export a fresh safety backup from the standalone phone app. Restoring `merged.db` replaces everything currently on the phone with the contents of that file, so changes made after the input backup was exported would otherwise be lost. The five starter illustrations are preserved only if they were present in that input backup; a different backup can replace them.
+
+Completion criteria: MongoDB illustrations are available in the standalone app, all five starter illustrations remain, and the original backup and source JSON are retained.
+
+Topic sharing between users is a separate planned in-app feature: `Export Topic` already creates a topic JSON bundle, but the app does not yet have a matching additive import.
 
 ### Phase 3.0.4: Verify Independence and Data Persistence
 

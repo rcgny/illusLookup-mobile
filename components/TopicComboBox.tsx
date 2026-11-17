@@ -3,6 +3,7 @@ import {
 	BackHandler,
 	Keyboard,
 	Pressable,
+	ScrollView,
 	StyleProp,
 	StyleSheet,
 	Text,
@@ -116,12 +117,11 @@ export function TopicComboBox({
 					{options.length === 0 ? (
 						<Text style={styles.comboEmpty}>{emptyMessage}</Text>
 					) : (
-						// Developer note: keep dropdown rows non-virtualized here.
-						// This shared component is used inside Create's outer ScrollView,
-						// and using FlatList would trigger React Native's
-						// "VirtualizedLists should never be nested inside plain ScrollViews"
-						// warning when opening the combo.
-						<View style={styles.comboList}>
+						<ScrollView
+							style={styles.comboList}
+							nestedScrollEnabled
+							keyboardShouldPersistTaps="handled"
+						>
 							{options.map((item) => (
 								<Pressable
 									key={item}
@@ -131,7 +131,7 @@ export function TopicComboBox({
 									<Text style={styles.comboOptionText}>{item}</Text>
 								</Pressable>
 							))}
-						</View>
+						</ScrollView>
 					)}
 					{!!hintMessage && <Text style={styles.comboHint}>{hintMessage}</Text>}
 				</View>
